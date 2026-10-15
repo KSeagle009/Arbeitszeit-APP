@@ -16,3 +16,15 @@ label{font-size:13px;color:var(--sub);display:block;margin:12px 0 6px}input,sele
 @media(max-width:380px){.year-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.year-bar-row{grid-template-columns:30px minmax(0,1fr) 80px;gap:8px}.year-axis{margin-right:88px;margin-left:38px}.year-switch button{font-size:12px}.year-hero .big{font-size:34px}}
 @media(prefers-reduced-motion:reduce){.year-bar-fill{transition:none}}
 .calculation-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.calculation-grid strong{display:block;font-size:22px;font-variant-numeric:tabular-nums;margin:4px 0}.calculation-segment{padding:9px 0;border-bottom:1px solid var(--line);font-size:12px;line-height:1.6}.calculation-segment:last-child{border-bottom:0}.calculation-segment span{display:block;color:var(--sub)}.calculation-heading{font-size:15px;margin:0 0 12px}.calculation-amount{font-size:15px;margin-top:12px}.calculation-hours{font-variant-numeric:tabular-nums}
+/* Separate touch targets for editing and deleting a recorded day. */
+.recorded-entry-row{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line)}
+.recorded-entry-row:last-child{border-bottom:0}
+.recorded-entry-row>.recent-entry,.recorded-entry-row>.year-entry{flex:1;min-width:0;width:auto;border-bottom:0}
+.recorded-entry-row>.recent-entry{flex-wrap:wrap;gap:6px 8px}
+.recorded-entry-row>.recent-entry>.icon{display:none}
+.recorded-entry-row>.year-entry>span:first-child{min-width:0;overflow-wrap:anywhere}
+.entry-delete,.item .entry-delete{display:inline-flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;min-width:44px;min-height:44px;padding:10px}
+.entry-delete .icon{width:22px;height:22px;pointer-events:none}
+.entry-list-text{flex:1;min-width:0;overflow-wrap:anywhere}
+.entry-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+#deleteStatus{max-width:822px;margin:0 auto 12px}
