@@ -28,3 +28,11 @@ label{font-size:13px;color:var(--sub);display:block;margin:12px 0 6px}input,sele
 .entry-list-text{flex:1;min-width:0;overflow-wrap:anywhere}
 .entry-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
 #deleteStatus{max-width:822px;margin:0 auto 12px}
+
+/* App reset confirmation uses the current light/dark palette. */
+.reset-card{border-color:var(--danger-ink)}
+.reset-dialog{width:min(440px,calc(100% - 28px));max-height:calc(100dvh - 32px);overflow:auto;margin:auto;padding:22px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:15px;box-shadow:0 16px 60px rgba(0,0,0,.3)}
+.reset-dialog::backdrop{background:rgba(0,0,0,.62)}
+.reset-dialog p{font-size:14px;line-height:1.6}
+.reset-dialog .row{margin-top:20px}
+.reset-dialog .row button{flex:1;min-width:120px}

@@ -202,7 +202,7 @@ function deleteEntry(date) {
  status.hidden = false;
 }
 
-function resetEntry(){editing=null;$('entryForm').reset();$('entryDate').value=todayStr;$('entryBreak').value=data.defaultBreak;$('entryInfo').hidden=true;toggleWork();applyEntryShift();renderEntryCalculation()}function toggleWork(){$('workFields').hidden=$('entryType').value!=='Arbeit';renderEntryShiftHint();renderEntryCalculation()}function editEntry(d){let e=data.entries[d];if(!e)return;editing=d;$('entryDate').value=d;$('entryType').value=e.type;$('entryStart').value=e.start||'06:00';$('entryEnd').value=e.end||'14:00';$('entryBreak').value=e.break??data.defaultBreak;$('entryPayout').value=e.payout||'time';$('entry50').value=e.override50??'';$('entry100').value=e.override100??'';$('entryNote').value=e.note||'';toggleWork();switchTab('entry');$('entryWorkplace').value=e.workplace||'';window.scrollTo(0,0)}function init(){if(realizePastVacation())localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$('entryType').onchange=toggleWork;$('entryReset').onclick=resetEntry;$('entryForm').onsubmit=e=>{e.preventDefault();let d=$('entryDate').value,type=$('entryType').value;if(!d)return;let item={type,start:$('entryStart').value,end:$('entryEnd').value,break:Number($('entryBreak').value),payout:$('entryPayout').value,override50:$('entry50').value===''?null:Number($('entry50').value),override100:$('entry100').value===''?null:Number($('entry100').value),note:$('entryNote').value,workplace:$('entryWorkplace').value};if(type==='Arbeit'){let entries={...data.entries};if(editing&&editing!==d)delete entries[editing];entries[d]=item;let result=TimeEngine.calculate(entries,shiftForDate)[d];if(result.error){alert(result.error);return}if([item.override50,item.override100].some(v=>v!==null&&(!Number.isFinite(v)||v<0))){alert('Bitte gültige Überstundenwerte eingeben.');return}} if(editing&&editing!==d)delete data.entries[editing];data.entries[d]=item;if(type==='TU')data.planned=data.planned.filter(x=>x!==d);save();$('entryInfo').hidden=false;$('entryInfo').textContent='Tag gespeichert. Du kannst ihn unten erneut bearbeiten.';editing=d;renderEntryCalculation()};$('recent').onclick=entryListAction;$('entryList').onclick=entryListAction;$('monthPrev').onclick=()=>{month.setMonth(month.getMonth()-1);selected=null;renderCalendar()};$('monthNext').onclick=()=>{month.setMonth(month.getMonth()+1);selected=null;renderCalendar()};$('calendar').onclick=e=>{let b=e.target.closest('[data-day]');if(b){selected=b.dataset.day;renderCalendar()}};$('planSelected').onclick=()=>{if(selected&&!weekend(selected))enterVacationDays([selected])};
+function resetEntry(){editing=null;$('entryForm').reset();$('entryDate').value=todayStr;$('entryBreak').value=data.defaultBreak;$('entryInfo').hidden=true;toggleWork();applyEntryShift();renderEntryCalculation()}function toggleWork(){$('workFields').hidden=$('entryType').value!=='Arbeit';renderEntryShiftHint();renderEntryCalculation()}function editEntry(d){let e=data.entries[d];if(!e)return;editing=d;$('entryDate').value=d;$('entryType').value=e.type;$('entryStart').value=e.start||'06:00';$('entryEnd').value=e.end||'14:00';$('entryBreak').value=e.break??data.defaultBreak;$('entryPayout').value=e.payout||'time';$('entry50').value=e.override50??'';$('entry100').value=e.override100??'';$('entryNote').value=e.note||'';toggleWork();switchTab('entry');$('entryWorkplace').value=e.workplace||'';window.scrollTo(0,0)}function init(){$('resetData').onclick=showResetDataDialog;$('cancelResetData').onclick=()=>$('resetDataDialog').close();$('confirmResetData').onclick=resetAllAppData;if(realizePastVacation())localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$('entryType').onchange=toggleWork;$('entryReset').onclick=resetEntry;$('entryForm').onsubmit=e=>{e.preventDefault();let d=$('entryDate').value,type=$('entryType').value;if(!d)return;let item={type,start:$('entryStart').value,end:$('entryEnd').value,break:Number($('entryBreak').value),payout:$('entryPayout').value,override50:$('entry50').value===''?null:Number($('entry50').value),override100:$('entry100').value===''?null:Number($('entry100').value),note:$('entryNote').value,workplace:$('entryWorkplace').value};if(type==='Arbeit'){let entries={...data.entries};if(editing&&editing!==d)delete entries[editing];entries[d]=item;let result=TimeEngine.calculate(entries,shiftForDate)[d];if(result.error){alert(result.error);return}if([item.override50,item.override100].some(v=>v!==null&&(!Number.isFinite(v)||v<0))){alert('Bitte gültige Überstundenwerte eingeben.');return}} if(editing&&editing!==d)delete data.entries[editing];data.entries[d]=item;if(type==='TU')data.planned=data.planned.filter(x=>x!==d);save();$('entryInfo').hidden=false;$('entryInfo').textContent='Tag gespeichert. Du kannst ihn unten erneut bearbeiten.';editing=d;renderEntryCalculation()};$('recent').onclick=entryListAction;$('entryList').onclick=entryListAction;$('monthPrev').onclick=()=>{month.setMonth(month.getMonth()-1);selected=null;renderCalendar()};$('monthNext').onclick=()=>{month.setMonth(month.getMonth()+1);selected=null;renderCalendar()};$('calendar').onclick=e=>{let b=e.target.closest('[data-day]');if(b){selected=b.dataset.day;renderCalendar()}};$('planSelected').onclick=()=>{if(selected&&!weekend(selected))enterVacationDays([selected])};
 $('removeSelected').onclick=()=>{data.planned=data.planned.filter(x=>x!==selected);save()};
 $('planRange').onclick=()=>{let a=$('planFrom').value,b=$('planTo').value;if(!a||!b||b<a){$('planInfo').innerHTML='<div class="notice warning">Bitte einen gültigen Zeitraum wählen.</div>';return}let dates=[];for(let d=a;d<=b;d=addDays(d,1)){if(dates.length===370){$('planInfo').innerHTML='<div class="notice warning">Bitte einen Zeitraum von maximal 370 Tagen auswählen.</div>';return}dates.push(d)}enterVacationDays(dates)};
 for(let y=today.getFullYear()-3;y<=today.getFullYear()+5;y++)$('yearSelect').add(new Option(String(y),String(y)));$('yearSelect').value=String(today.getFullYear());$('yearSelect').onchange=chooseYearMonth;
@@ -369,6 +369,33 @@ async function importBackup(event) {
   input.disabled = false;
   exportButton.disabled = false;
  }
+}
+
+function showResetDataDialog() {
+ if ($('importData').disabled) {
+  backupMessage('Bitte die laufende Wiederherstellung zuerst abschließen.', 'warning');
+  return;
+ }
+ $('resetDataError').hidden = true;
+ $('confirmResetData').disabled = false;
+ $('resetDataDialog').showModal();
+}
+function resetAllAppData() {
+ try {
+  // Only this app's complete data record; other apps on the same host stay intact.
+  localStorage.removeItem('arbeitszeit-v3');
+ } catch {
+  $('resetDataError').textContent = 'Die Daten konnten nicht gelöscht werden. Deine bisherigen Daten bleiben erhalten. Bitte versuche es erneut.';
+  $('resetDataError').hidden = false;
+  return;
+ }
+ $('confirmResetData').disabled = true;
+ // Clear unsaved fields as well, before the browser can restore form values.
+ document.querySelectorAll('input,textarea').forEach(field => { field.value = field.type === 'file' ? '' : field.defaultValue; });
+ document.querySelectorAll('select').forEach(field => { field.selectedIndex = 0; });
+ $('resetDataDialog').close();
+ // Start with fresh defaults and discard every cached calculation and open draft.
+ window.location.reload();
 }
 
 function fillSettings(){for(let k of ['initialVacation','initialTime','defaultBreak','annualVacation','startDate','theme'])$(k).value=data[k];$('shiftDate').dispatchEvent(new Event('change'))}init()})();
