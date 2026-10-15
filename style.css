@@ -62,3 +62,32 @@ body.dark{--holiday-bg:#41321b;--holiday-ink:#ffda94;--holiday-edge:#bd9144}
 .plan-weekday-grid input{margin:0;width:18px;height:18px;min-height:0;accent-color:var(--accent)}
 .plan-weekday-presets{display:flex;gap:8px;margin-top:9px}
 .plan-weekday-presets button{font-size:12px;padding:8px 12px}
+
+.report-controls[hidden]{display:none!important}
+.report-controls{margin:12px 0}
+.report-range-info{line-height:1.6;margin:12px 0}
+#printReport{display:none}
+@page{size:A4 landscape;margin:12mm}
+@media print{
+ html:has(body.printing-report){background:white!important;color-scheme:light!important}
+ body.printing-report{background:white!important;color:black!important;color-scheme:light!important}
+ body.printing-report>:not(#printReport){display:none!important}
+ body.printing-report #printReport{display:block!important;font-family:Arial,sans-serif;font-size:9pt;color:#172b30;background:white}
+ #printReport .report-heading{display:flex;justify-content:space-between;align-items:start;gap:15px;padding:0 0 10px;max-width:none;margin:0;border-bottom:2px solid #007e78}
+ #printReport .report-heading h1{font-size:20pt;letter-spacing:-.4px;margin:0 0 5px}
+ #printReport .report-heading p{font-size:10pt;margin:0}
+ #printReport .report-heading>span{font-size:10pt;font-weight:bold;white-space:nowrap}
+ #printReport .report-totals{padding:8px 0 10px;font-size:9pt;line-height:1.5}
+ #printReport .report-totals p{margin:4px 0}
+ #printReport .report-table{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;font-size:8pt;line-height:1.4}
+ #printReport .report-table th{background:#e6f2f0;text-align:left;font-size:8pt;border-bottom:1px solid #78908e;padding:7px 5px}
+ #printReport .report-table td{vertical-align:top;padding:7px 5px;border-bottom:1px solid #d1dddb;overflow-wrap:anywhere;break-inside:avoid;page-break-inside:avoid}
+ #printReport .report-table small{font-size:7pt;color:#43585d}
+ #printReport .report-table thead{display:table-header-group;break-inside:avoid;break-after:avoid}
+ #printReport .report-table tr{break-inside:avoid;page-break-inside:avoid}
+ #printReport .report-number{text-align:right;font-variant-numeric:tabular-nums}
+ #printReport .report-note{white-space:pre-wrap}
+ #printReport .report-error td{background:#fff2e9}
+ #printReport .report-error-note{border:1px solid #a94921;padding:8px;color:#7d3011}
+ #printReport .report-footer{margin-top:14px;font-size:7pt;line-height:1.5;color:#43585d}
+}

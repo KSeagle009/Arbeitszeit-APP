@@ -1,4 +1,4 @@
-<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101a31"><title>Meine Arbeitszeit</title><link rel="stylesheet" href="style.css?v=20ea5f1fd297"></head><body><header><small>MEINE ARBEITSZEIT</small><span class="app-version" id="appVersion" aria-label="App-Version"></span><h1 id="heading">Übersicht</h1><small id="today"></small></header><main><div id="deleteStatus" class="notice success" role="status" aria-live="polite" hidden></div>
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101a31"><title>Meine Arbeitszeit</title><link rel="stylesheet" href="style.css?v=9c76a7156d91"></head><body><header><small>MEINE ARBEITSZEIT</small><span class="app-version" id="appVersion" aria-label="App-Version"></span><h1 id="heading">Übersicht</h1><small id="today"></small></header><main><div id="deleteStatus" class="notice success" role="status" aria-live="polite" hidden></div>
 <section id="overview"><div class="grid"><div class="card balance-card"><div class="metric-title"><span class="icon-badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg></span>Zeittopf</div><div class="big" id="balance">0 h</div><div class="mini">Aktueller Saldo</div></div><div class="card balance-card vacation-balance"><div class="metric-title"><span class="icon-badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 0 1 18 0H3Zm9-9v17a2 2 0 0 0 4 0M7 11a17 17 0 0 1 5-9 17 17 0 0 1 5 9"/></svg></span>Urlaub</div><div class="big" id="vacCurrent">0 Tage</div><div class="mini" id="vacApril">01.04.: —</div><div class="mini" id="vacAfter">Nach allen Planungen: —</div></div></div>
 <div class="month-summary" aria-labelledby="summaryMonth">
   <h2 id="summaryMonth">Dieser Monat</h2>
@@ -29,7 +29,20 @@
 <button type="button" id="saveShift" style="margin-top:12px">Wochenplan speichern</button><div id="shiftInfo" class="notice" role="status"></div>
 <h4>Eigene Schicht hinzufügen</h4><div class="split"><div><label for="customShiftStart">Beginn</label><input type="time" id="customShiftStart"></div><div><label for="customShiftEnd">Ende</label><input type="time" id="customShiftEnd"></div></div>
 <button type="button" class="secondary" id="addCustomShift" style="margin-top:12px">Schicht hinzufügen</button><div id="customShiftInfo" class="mini" role="status" style="margin-top:8px"></div>
-<h4>Gespeicherte Wochen</h4><div id="shiftList"></div></div><div class="card"><h3>Zusätzliche Urlaubsgutschrift</h3><div class="split"><div><label>Datum</label><input type="date" id="creditDate"></div><div><label>Tage (+/−)</label><input type="number" step="0.5" id="creditDays" value="1"></div></div><button id="addCredit" style="margin-top:12px">Buchen</button><div id="creditList"></div></div><div class="card" id="backupCard">
+<h4>Gespeicherte Wochen</h4><div id="shiftList"></div></div><div class="card"><h3>Zusätzliche Urlaubsgutschrift</h3><div class="split"><div><label>Datum</label><input type="date" id="creditDate"></div><div><label>Tage (+/−)</label><input type="number" step="0.5" id="creditDays" value="1"></div></div><button id="addCredit" style="margin-top:12px">Buchen</button><div id="creditList"></div></div><div class="card" id="reportCard">
+<h3>Export und Drucken</h3>
+<p class="mini">Arbeitszeiten, Überstunden, Urlaub, Zeitausgleich und Zeittopf für den gewünschten Zeitraum ausgeben.</p>
+<label for="reportPeriod">Zeitraum</label><select id="reportPeriod"><option value="week">Woche</option><option value="month" selected>Monat</option><option value="year">Jahr</option><option value="range">Freier Zeitraum</option><option value="all">Alle gespeicherten Daten</option></select>
+<div class="report-controls" id="reportControls-week" hidden><label for="reportWeekDate">Ein Tag in der gewünschten Kalenderwoche</label><input type="date" id="reportWeekDate"></div>
+<div class="report-controls" id="reportControls-month"><label for="reportMonth">Monat auswählen</label><input type="month" id="reportMonth"></div>
+<div class="report-controls" id="reportControls-year" hidden><label for="reportYear">Jahr auswählen</label><input type="number" id="reportYear" min="1900" max="9999" step="1"></div>
+<div class="report-controls" id="reportControls-range" hidden><div class="split"><div><label for="reportFrom">Von</label><input type="date" id="reportFrom"></div><div><label for="reportTo">Bis</label><input type="date" id="reportTo"></div></div></div>
+<div class="mini report-range-info" id="reportRangeInfo" aria-live="polite"></div>
+<label for="reportCsvFormat">CSV-Format für Excel</label><select id="reportCsvFormat"><option value="at">Österreich: Dezimalkomma, Semikolon</option><option value="international">International: Dezimalpunkt, Komma</option></select>
+<div class="row" style="margin-top:14px"><button type="button" id="exportCsv">CSV exportieren</button><button type="button" class="secondary" id="printData">Drucken</button></div>
+<p class="mini">CSV ist für Auswertungen in Excel gedacht. Für eine vollständige Wiederherstellung verwende weiterhin „Alle Daten sichern“.</p>
+<div id="reportStatus" class="notice" role="status" aria-live="polite" hidden></div>
+</div><div class="card" id="backupCard">
 <h3>Datensicherung und Wiederherstellung</h3>
 <p class="mini">Deine Änderungen werden automatisch in diesem Browser gespeichert. Mit einer Sicherungsdatei kannst du alle gespeicherten Daten aufbewahren und später wiederherstellen.</p>
 <p class="mini">Enthalten sind sämtliche erfassten Tage und Überstunden, Urlaubsplanungen, Salden, Urlaubsgutschriften, Arbeitsplätze, Wochen- und Tagesschichten, eigene Schichten und alle Einstellungen.</p>
@@ -52,4 +65,4 @@
 <p>Das Löschen kann nur mit einer zuvor gespeicherten Sicherungsdatei rückgängig gemacht werden.</p>
 <div id="resetDataError" class="notice warning" role="alert" hidden></div>
 <div class="row"><button type="button" class="secondary" id="cancelResetData" autofocus>Abbrechen</button><button type="button" class="danger" id="confirmResetData">Alles löschen</button></div>
-</dialog><script src="app.js?v=3719c23649de"></script></body></html>
+</dialog><article id="printReport" aria-label="Arbeitszeitnachweis"></article><script src="app.js?v=bbe83985ab44"></script></body></html>

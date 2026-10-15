@@ -1,5 +1,5 @@
 
-(()=>{'use strict';const APP_VERSION='0.2';const $=id=>document.getElementById(id),today=new Date(),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,todayStr=dateISO(today),dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay()),defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data;try{data={...defaultData,...JSON.parse(localStorage.getItem('arbeitszeit-v3')||'{}')}}catch{data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false;function save(){realizePastVacation();localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));render()}
+(()=>{'use strict';const APP_VERSION='0.3';const $=id=>document.getElementById(id),today=new Date(),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,todayStr=dateISO(today),dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay()),defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data;try{data={...defaultData,...JSON.parse(localStorage.getItem('arbeitszeit-v3')||'{}')}}catch{data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false;function save(){realizePastVacation();localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));render()}
 // Vacation calendar: statutory Austrian holidays plus the user's free days.
 // The extra free days do not change the separate overtime premium rules.
 function vacationHolidayName(date) {
@@ -413,7 +413,7 @@ function deleteEntry(date) {
  status.hidden = false;
 }
 
-function resetEntry(){editing=null;$('entryForm').reset();$('entryDate').value=todayStr;$('entryBreak').value=data.defaultBreak;$('entryInfo').hidden=true;toggleWork();applyEntryShift();renderEntryCalculation()}function toggleWork(){$('workFields').hidden=$('entryType').value!=='Arbeit';renderEntryShiftHint();renderEntryCalculation()}function editEntry(d){let e=data.entries[d];if(!e)return;editing=d;$('entryDate').value=d;$('entryType').value=e.type;$('entryStart').value=e.start||'06:00';$('entryEnd').value=e.end||'14:00';$('entryBreak').value=e.break??data.defaultBreak;$('entryPayout').value=e.payout||'time';$('entry50').value=e.override50??'';$('entry100').value=e.override100??'';$('entryNote').value=e.note||'';toggleWork();switchTab('entry');$('entryWorkplace').value=e.workplace||'';window.scrollTo(0,0)}function init(){$('appVersion').textContent='V '+APP_VERSION;$('resetData').onclick=showResetDataDialog;$('cancelResetData').onclick=()=>$('resetDataDialog').close();$('confirmResetData').onclick=resetAllAppData;if(realizePastVacation())localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$('entryType').onchange=toggleWork;$('entryReset').onclick=resetEntry;$('entryForm').onsubmit=e=>{e.preventDefault();let d=$('entryDate').value,type=$('entryType').value;if(!d)return;let item={type,start:$('entryStart').value,end:$('entryEnd').value,break:Number($('entryBreak').value),payout:$('entryPayout').value,override50:$('entry50').value===''?null:Number($('entry50').value),override100:$('entry100').value===''?null:Number($('entry100').value),note:$('entryNote').value,workplace:$('entryWorkplace').value};if(type==='Arbeit'){let entries={...data.entries};if(editing&&editing!==d)delete entries[editing];entries[d]=item;let result=TimeEngine.calculate(entries,shiftForDate)[d];if(result.error){alert(result.error);return}if([item.override50,item.override100].some(v=>v!==null&&(!Number.isFinite(v)||v<0))){alert('Bitte gültige Überstundenwerte eingeben.');return}} if(editing&&editing!==d)delete data.entries[editing];data.entries[d]=item;if(type==='TU')data.planned=data.planned.filter(x=>x!==d);save();$('entryInfo').hidden=false;$('entryInfo').textContent='Tag gespeichert. Du kannst ihn unten erneut bearbeiten.';editing=d;renderEntryCalculation()};$('recent').onclick=entryListAction;$('entryList').onclick=entryListAction;$('monthPrev').onclick=()=>{month.setMonth(month.getMonth()-1);selected=null;renderCalendar()};$('monthNext').onclick=()=>{month.setMonth(month.getMonth()+1);selected=null;renderCalendar()};initCalendarSelection();
+function resetEntry(){editing=null;$('entryForm').reset();$('entryDate').value=todayStr;$('entryBreak').value=data.defaultBreak;$('entryInfo').hidden=true;toggleWork();applyEntryShift();renderEntryCalculation()}function toggleWork(){$('workFields').hidden=$('entryType').value!=='Arbeit';renderEntryShiftHint();renderEntryCalculation()}function editEntry(d){let e=data.entries[d];if(!e)return;editing=d;$('entryDate').value=d;$('entryType').value=e.type;$('entryStart').value=e.start||'06:00';$('entryEnd').value=e.end||'14:00';$('entryBreak').value=e.break??data.defaultBreak;$('entryPayout').value=e.payout||'time';$('entry50').value=e.override50??'';$('entry100').value=e.override100??'';$('entryNote').value=e.note||'';toggleWork();switchTab('entry');$('entryWorkplace').value=e.workplace||'';window.scrollTo(0,0)}function init(){$('appVersion').textContent='v'+APP_VERSION;initReports();$('resetData').onclick=showResetDataDialog;$('cancelResetData').onclick=()=>$('resetDataDialog').close();$('confirmResetData').onclick=resetAllAppData;if(realizePastVacation())localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$('entryType').onchange=toggleWork;$('entryReset').onclick=resetEntry;$('entryForm').onsubmit=e=>{e.preventDefault();let d=$('entryDate').value,type=$('entryType').value;if(!d)return;let item={type,start:$('entryStart').value,end:$('entryEnd').value,break:Number($('entryBreak').value),payout:$('entryPayout').value,override50:$('entry50').value===''?null:Number($('entry50').value),override100:$('entry100').value===''?null:Number($('entry100').value),note:$('entryNote').value,workplace:$('entryWorkplace').value};if(type==='Arbeit'){let entries={...data.entries};if(editing&&editing!==d)delete entries[editing];entries[d]=item;let result=TimeEngine.calculate(entries,shiftForDate)[d];if(result.error){alert(result.error);return}if([item.override50,item.override100].some(v=>v!==null&&(!Number.isFinite(v)||v<0))){alert('Bitte gültige Überstundenwerte eingeben.');return}} if(editing&&editing!==d)delete data.entries[editing];data.entries[d]=item;if(type==='TU')data.planned=data.planned.filter(x=>x!==d);save();$('entryInfo').hidden=false;$('entryInfo').textContent='Tag gespeichert. Du kannst ihn unten erneut bearbeiten.';editing=d;renderEntryCalculation()};$('recent').onclick=entryListAction;$('entryList').onclick=entryListAction;$('monthPrev').onclick=()=>{month.setMonth(month.getMonth()-1);selected=null;renderCalendar()};$('monthNext').onclick=()=>{month.setMonth(month.getMonth()+1);selected=null;renderCalendar()};initCalendarSelection();
 for(let y=today.getFullYear()-3;y<=today.getFullYear()+5;y++)$('yearSelect').add(new Option(String(y),String(y)));$('yearSelect').value=String(today.getFullYear());$('yearSelect').onchange=chooseYearMonth;
 document.querySelectorAll('[data-year-measure]').forEach(b=>b.onclick=()=>{yearMeasure=b.dataset.yearMeasure;renderYear()});
 $('yearBars').onclick=e=>{let b=e.target.closest('[data-year-month]');if(b){yearMonth=Number(b.dataset.yearMonth);renderYear()}};
@@ -606,6 +606,122 @@ function resetAllAppData() {
  $('resetDataDialog').close();
  // Start with fresh defaults and discard every cached calculation and open draft.
  window.location.reload();
+}
+
+function reportRange() {
+ const kind=$('reportPeriod').value;
+ let from,to,label;
+ if(kind==='week') {
+  const date=$('reportWeekDate').value;
+  if(!backupDate(date)) throw new Error('Bitte ein Datum für die Kalenderwoche auswählen.');
+  from=monday(date); to=addDays(from,6); label=weekKey(date).replace('-KW',' · KW ');
+ } else if(kind==='month') {
+  const value=$('reportMonth').value;
+  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) throw new Error('Bitte einen gültigen Monat auswählen.');
+  const [year,month]=value.split('-').map(Number);
+  from=value+'-01'; to=value+'-'+new Date(year,month,0).getDate();
+  label=dateObj(from).toLocaleDateString('de-AT',{month:'long',year:'numeric'});
+ } else if(kind==='year') {
+  const year=$('reportYear').value;
+  if(!/^\d{4}$/.test(year)||Number(year)<1900) throw new Error('Bitte ein gültiges Jahr eingeben.');
+  from=year+'-01-01'; to=year+'-12-31'; label='Jahr '+year;
+ } else if(kind==='range') {
+  from=$('reportFrom').value; to=$('reportTo').value; label='Freier Zeitraum';
+ } else {
+  const dates=[todayStr,data.startDate,...Object.keys(data.entries),...data.planned,...data.credits.map(c=>c.date)].filter(backupDate).sort();
+  from=dates[0]; to=dates.at(-1); label='Alle gespeicherten Daten';
+ }
+ if(!backupDate(from)||!backupDate(to)||to<from) throw new Error('Bitte einen gültigen Zeitraum wählen: Von darf nicht nach Bis liegen.');
+ return {from,to,label,kind};
+}
+function updateReportPeriod() {
+ const kind=$('reportPeriod').value;
+ for(const name of ['week','month','year','range']) $('reportControls-'+name).hidden=name!==kind;
+ try {const range=reportRange();$('reportRangeInfo').textContent=range.label+' · '+formatDate(range.from)+' bis '+formatDate(range.to);}
+ catch(error) {$('reportRangeInfo').textContent=error.message;}
+ $('reportStatus').hidden=true;
+}
+function reportMessage(text,warning=false) {
+ $('reportStatus').hidden=false;
+ $('reportStatus').className='notice '+(warning?'warning':'success');
+ $('reportStatus').textContent=text;
+}
+function reportTimeAt(until,results) {
+ const cutoff=until<todayStr?until:todayStr;
+ let balance=Number(data.initialTime)||0;
+ for(const [date,value] of Object.entries(results)) if(date>=data.startDate&&date<=cutoff) balance+=value.balance||0;
+ return round(balance);
+}
+function buildReport() {
+ const range=reportRange(),results=TimeEngine.calculate(data.entries,shiftForDate);
+ const dates=new Set([...Object.keys(data.entries),...data.planned,...data.credits.map(c=>c.date)]);
+ const annual=new Set(Number(data.annualVacation)?annualDates(range.to):[]);
+ for(const date of annual) dates.add(date);
+ const names={Arbeit:'Arbeit',TU:'Urlaub',ZA:'Zeitausgleich',KK:'Krankenstand',Feiertag:'Feiertag',Frei:'Frei'};
+ const rows=[...dates].filter(date=>date>=range.from&&date<=range.to).sort().map(date=>{
+  const entry=data.entries[date],detail=results[date]||{},planned=!entry&&data.planned.includes(date);
+  const credits=data.credits.filter(c=>c.date===date).reduce((sum,c)=>sum+Number(c.days),0)+(annual.has(date)?Number(data.annualVacation)||0:0);
+  const work=entry?.type==='Arbeit',eligible=vacationWorkday(date);
+  const status=entry?(date>todayStr?'Erfasst (zukünftig)':'Erfasst'):planned?'Geplant':'Gutschrift';
+  const notes=[entry?.note||''];
+  if(credits&&entry) notes.push('Urlaubsgutschrift: '+fmt(credits)+' Tage');
+  if(detail.error) notes.push('Berechnungsfehler: '+detail.error);
+  if(date<data.startDate) notes.push('Vor dem Startdatum der Salden');
+  return {date,weekday:dateObj(date).toLocaleDateString('de-AT',{weekday:'short'}),status,
+   type:entry?(names[entry.type]||entry.type):planned?'Urlaub geplant':'Urlaubsgutschrift',
+   workplace:work?entry.workplace||'':'',start:work?entry.start:'',end:work?entry.end:'',pause:work?entry.break:'',
+   worked:detail.worked||0,overtime:detail.overtime||0,h50:detail.h50||0,h100:detail.h100||0,
+   payout:work?(entry.payout==='pay'?'Auszahlung':'Zeittopf'):'',credit:detail.credit||0,
+   timeChange:date>=data.startDate&&date<=todayStr?(detail.balance||0):0,
+   timeBalance:reportTimeAt(date,results),vacation:entry?.type==='TU'&&eligible?1:0,
+   planned:planned&&eligible?1:0,grant:credits,vacationBalance:vacationAt(date),
+   holiday:vacationHolidayName(date),note:notes.filter(Boolean).join(' · '),error:detail.error||'',
+   za:entry?.type==='ZA'?1:0};
+ });
+ const total=key=>round(rows.reduce((sum,row)=>sum+(Number(row[key])||0),0));
+ const cutoff=range.to<todayStr?range.to:todayStr;
+ return {...range,rows,totals:Object.fromEntries(['worked','overtime','h50','h100','credit','timeChange','vacation','planned','za','grant'].map(key=>[key,total(key)])),
+  cutoff,timeBalance:reportTimeAt(cutoff,results),vacationBalance:vacationAt(cutoff),vacationForecast:vacationAt(range.to),
+  errors:rows.filter(row=>row.error).length};
+}
+function exportReportCsv() {
+ try {
+  const report=buildReport(),international=$('reportCsvFormat').value==='international',delimiter=international?',':';';
+  const cell=value=>{
+   let text;
+   if(typeof value==='number') text=String(round(value)).replace('.',international?'.':',');
+   else {text=String(value??'');if(/^\s*[=+@-]/.test(text))text="'"+text;}
+   return '"'+text.replace(/"/g,'""')+'"';
+  };
+  const headers=['Datum','Wochentag','Status','Tagesart','Arbeitsplatz','Beginn','Ende','Pause (min)','Nettoarbeitszeit (h)','Überstunden gesamt (h)','Überstunden 50 % (h)','Überstunden 100 % (h)','Buchungsart','Zeitgutschrift inkl. Zuschläge (h)','Zeittopf Änderung (h)','Zeittopf Stand (h)','Urlaub erfasst (Tage)','Urlaub geplant (Tage)','Urlaubsgutschrift (Tage)','Urlaubssaldo / Prognose (Tage)','Feiertag / arbeitsfrei','Bemerkung','Berechnungsfehler'];
+  const lines=[headers,...report.rows.map(r=>[r.date,r.weekday,r.status,r.type,r.workplace,r.start,r.end,r.pause,r.worked,r.overtime,r.h50,r.h100,r.payout,r.credit,r.timeChange,r.timeBalance,r.vacation,r.planned,r.grant,r.vacationBalance,r.holiday,r.note,r.error])];
+  const content='\ufeff'+lines.map(row=>row.map(cell).join(delimiter)).join('\r\n')+'\r\n';
+  const blob=new Blob([content],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download='arbeitszeit-'+report.from+'-bis-'+report.to+'.csv';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  reportMessage('CSV-Datei für '+report.label+' erstellt ('+report.rows.length+' Zeilen).'+(report.errors?' '+report.errors+' Einträge enthalten Berechnungsfehler und sind in der Datei gekennzeichnet.':''),!!report.errors);
+ } catch(error) {reportMessage(error.message,true);}
+}
+function printReport() {
+ try {
+  const report=buildReport(),h=escapeHtml;
+  const rows=report.rows.map(row=>'<tr'+(row.error?' class="report-error"':'')+'><td><b>'+h(formatDate(row.date))+'</b><br>'+h(row.weekday+' · '+row.type)+'<br><small>'+h(row.status)+(row.holiday?'<br>'+h(row.holiday):'')+'</small></td><td>'+h(row.start?row.start+'–'+row.end:'—')+(row.start?'<br><small>'+h(row.pause)+' min Pause'+(row.workplace?'<br>'+h(row.workplace):'')+'</small>':'')+'</td><td class="report-number">'+fmt(row.worked)+'</td><td class="report-number">'+fmt(row.h50)+' / '+fmt(row.h100)+'</td><td>'+h(row.payout||'—')+(row.credit?'<br><small>'+fmt(row.credit)+' h Gutschrift</small>':'')+'</td><td class="report-number">'+fmt(row.timeChange)+'<br><small>Stand '+fmt(row.timeBalance)+' h</small></td><td>'+h(row.vacation?row.vacation+' Tag':row.planned?row.planned+' Tag geplant':'—')+(row.grant?'<br><small>Gutschrift '+fmt(row.grant)+' Tage</small>':'')+'<br><small>Saldo / Prognose '+fmt(row.vacationBalance)+'</small></td><td class="report-note">'+h(row.note||'—')+'</td></tr>').join('');
+  $('printReport').innerHTML='<header class="report-heading"><div><h1>Arbeitszeitnachweis</h1><p>'+h(report.label)+' · '+h(formatDate(report.from))+' bis '+h(formatDate(report.to))+'</p></div><span>v'+h(APP_VERSION)+'</span></header>'+
+   '<div class="report-totals"><p><b>'+fmt(report.totals.worked)+' h erfasste Arbeitszeit</b> · '+fmt(report.totals.overtime)+' h Überstunden (50 %: '+fmt(report.totals.h50)+' h / 100 %: '+fmt(report.totals.h100)+' h)</p><p>'+fmt(report.totals.vacation)+' Urlaubstage erfasst · '+fmt(report.totals.planned)+' Urlaubstage geplant · '+fmt(report.totals.za)+' Tage Zeitausgleich</p><p><b>Stand '+h(formatDate(report.cutoff))+':</b> Zeittopf '+fmt(report.timeBalance)+' h · Urlaub '+fmt(report.vacationBalance)+' Tage · <b>Urlaubsprognose bis '+h(formatDate(report.to))+':</b> '+fmt(report.vacationForecast)+' Tage</p></div>'+
+   (report.errors?'<p class="report-error-note">'+report.errors+' Einträge mit Berechnungsfehlern. Die betroffenen Stunden sind mit 0 ausgewiesen; bitte die gekennzeichneten Einträge prüfen.</p>':'')+
+   '<table class="report-table"><colgroup><col style="width:15%"><col style="width:14%"><col style="width:6%"><col style="width:9%"><col style="width:12%"><col style="width:13%"><col style="width:14%"><col style="width:17%"></colgroup><thead><tr><th>Tag / Tagesart</th><th>Arbeitszeit</th><th>Netto<br>h</th><th>Ü 50 / 100 %<br>h</th><th>Buchung</th><th>Zeittopf +/-<br>h</th><th>Urlaub<br>Tage</th><th>Bemerkung</th></tr></thead><tbody>'+ (rows||'<tr><td colspan="8">Keine gespeicherten Einträge in diesem Zeitraum.</td></tr>')+'</tbody></table>'+
+   '<footer class="report-footer">Nettoarbeitszeit ohne Pause; Überstunden ohne Zuschläge. Zeittopf-Stände berücksichtigen gebuchte Einträge ab '+h(formatDate(data.startDate))+' bis spätestens heute. Zukünftige Arbeit ist als solche gekennzeichnet; Urlaubsplanungen fließen in die Prognose ein. Dargestellt sind gespeicherte Einträge, Planungen und Urlaubsgutschriften. Erstellt am '+h(new Date().toLocaleString('de-AT'))+'.</footer>';
+  document.body.classList.add('printing-report');
+  reportMessage('Druckansicht für '+report.label+' bereit. Im Druckdialog kannst du drucken oder als PDF sichern.'+(report.errors?' Bitte die markierten Berechnungsfehler prüfen.':''),!!report.errors);
+  window.print();
+ } catch(error) {document.body.classList.remove('printing-report');reportMessage('Druckansicht konnte nicht erstellt werden. '+error.message,true);}
+}
+function initReports() {
+ $('reportWeekDate').value=todayStr;$('reportMonth').value=todayStr.slice(0,7);$('reportYear').value=today.getFullYear();$('reportFrom').value=todayStr;$('reportTo').value=todayStr;
+ $('reportPeriod').onchange=updateReportPeriod;
+ for(const id of ['reportWeekDate','reportMonth','reportYear','reportFrom','reportTo']) $(id).addEventListener('input',updateReportPeriod);
+ $('exportCsv').onclick=exportReportCsv;$('printData').onclick=printReport;
+ window.addEventListener('afterprint',()=>document.body.classList.remove('printing-report'));
+ updateReportPeriod();
 }
 
 function fillSettings(){for(let k of ['initialVacation','initialTime','defaultBreak','annualVacation','startDate','theme'])$(k).value=data[k];$('shiftDate').dispatchEvent(new Event('change'))}init()})();
