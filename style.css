@@ -47,3 +47,18 @@ body.dark{--holiday-bg:#41321b;--holiday-ink:#ffda94;--holiday-edge:#bd9144}
 .calendar-holidays ul{list-style:none;padding:0;margin:7px 0 0}
 .calendar-holidays li{padding:4px 0}
 .calendar-holidays li strong{color:var(--ink)}
+
+.calendar-selection-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.calendar-selection-toolbar button{flex:1;min-width:110px;font-size:12px;padding:10px 8px}
+.calendar-selection-toolbar button[aria-pressed=true]{background:var(--accent);color:var(--button-ink)}
+.calendar-selection-help{margin:10px 0;line-height:1.6}
+.calendar-selection-summary{line-height:1.6;font-size:13px;margin:13px 0;color:var(--ink);font-weight:600}
+.calendar{-webkit-user-select:none;user-select:none}
+.plan-weekdays{margin:15px 0;padding:0;border:0;min-width:0}
+.plan-weekdays legend{font-size:13px;color:var(--sub);margin-bottom:8px}
+.plan-weekday-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}
+.plan-weekday-grid label{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:64px;margin:0;background:var(--field-bg);border:1px solid var(--line);border-radius:9px;color:var(--ink);cursor:pointer}
+.plan-weekday-grid label:has(input:checked){background:var(--soft);border-color:var(--accent)}
+.plan-weekday-grid input{margin:0;width:18px;height:18px;min-height:0;accent-color:var(--accent)}
+.plan-weekday-presets{display:flex;gap:8px;margin-top:9px}
+.plan-weekday-presets button{font-size:12px;padding:8px 12px}

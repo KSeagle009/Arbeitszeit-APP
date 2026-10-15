@@ -1,5 +1,5 @@
 
-(()=>{'use strict';const APP_VERSION='0.1';const $=id=>document.getElementById(id),today=new Date(),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,todayStr=dateISO(today),dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay()),defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data;try{data={...defaultData,...JSON.parse(localStorage.getItem('arbeitszeit-v3')||'{}')}}catch{data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));}let selected=null,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false;function save(){realizePastVacation();localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));render()}
+(()=>{'use strict';const APP_VERSION='0.2';const $=id=>document.getElementById(id),today=new Date(),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,todayStr=dateISO(today),dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay()),defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data;try{data={...defaultData,...JSON.parse(localStorage.getItem('arbeitszeit-v3')||'{}')}}catch{data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false;function save(){realizePastVacation();localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));render()}
 // Vacation calendar: statutory Austrian holidays plus the user's free days.
 // The extra free days do not change the separate overtime premium rules.
 function vacationHolidayName(date) {
@@ -43,6 +43,146 @@ function enterVacationDays(dates) {
  if (conflicts.length) parts.push(conflicts.length+' Tage mit bestehenden Einträgen übersprungen: '+conflicts.map(formatDate).join(', '));
  $('planInfo').innerHTML='<div class="notice '+(conflicts.length?'warning':'')+'">'+(parts.join('. ')||'Keine zusätzlichen Urlaubstage im ausgewählten Zeitraum')+'.</div>';
 }
+function calendarDates() { return [...calendarSelection].sort(); }
+function selectableCalendarDay(date) { return vacationWorkday(date) || data.planned.includes(date); }
+function renderCalendarSelection() {
+ const dates=calendarDates();
+ const fresh=dates.filter(d=>vacationWorkday(d)&&!data.entries[d]&&!data.planned.includes(d));
+ const planned=dates.filter(d=>data.planned.includes(d));
+ const booked=dates.filter(d=>!!data.entries[d]);
+ $('calendarMulti').setAttribute('aria-pressed', String(calendarMulti));
+ $('calendarMulti').textContent=calendarMulti?'Mehrfachauswahl aktiv':'Mehrere Tage auswählen';
+ $('calendarSelectionHelp').textContent=calendarMulti?'Tippe Tage an, um sie aus- oder abzuwählen. Am PC kannst du mit gedrückter Maustaste über mehrere Tage ziehen.':'Tippe auf einen Tag. Für mehrere Tage aktiviere die Mehrfachauswahl oder wähle einen Zeitraum.';
+ $('calendarSelectionSummary').textContent=dates.length?dates.length+' Tage ausgewählt · '+fresh.length+' neu planbar · '+planned.length+' bereits geplant · '+booked.length+' bereits gebucht':'Keine Tage ausgewählt. Die Auswahl wird erst mit „Auswahl übernehmen“ gespeichert.';
+ $('clearCalendarSelection').disabled=dates.length===0;
+ $('planSelected').textContent='Auswahl übernehmen';
+ $('planSelected').disabled=fresh.length===0;
+ $('removeSelected').textContent='Planungen entfernen';
+ $('removeSelected').disabled=planned.length===0;
+ for(const day of $('calendar').querySelectorAll('[data-day]')) {
+  const active=calendarSelection.has(day.dataset.day);
+  day.classList.toggle('selected',active);
+  day.setAttribute('aria-pressed',String(active));
+ }
+}
+function clearCalendarSelection() {
+ calendarSelection.clear(); selected=null; calendarDrag=null;
+ renderCalendar();
+}
+function toggleCalendarMulti() {
+ calendarMulti=!calendarMulti;
+ if(!calendarMulti&&calendarSelection.size>1) {
+  const keep=calendarSelection.has(selected)?selected:calendarDates().at(-1);
+  calendarSelection=new Set(keep?[keep]:[]); selected=keep||null;
+ }
+ renderCalendar();
+}
+function clickCalendarDay(event) {
+ if(suppressCalendarClick) { suppressCalendarClick=false; return; }
+ const button=event.target.closest('[data-day]');
+ if(!button) return;
+ const date=button.dataset.day; selected=date;
+ if(!calendarMulti) calendarSelection.clear();
+ if(selectableCalendarDay(date)) {
+  if(calendarMulti&&calendarSelection.has(date)) calendarSelection.delete(date);
+  else calendarSelection.add(date);
+ }
+ renderCalendar();
+}
+function selectCalendarRange() {
+ const from=$('planFrom').value,to=$('planTo').value;
+ const message=text=>{ $('planInfo').textContent=text; };
+ if(!backupDate(from)||!backupDate(to)||to<from) { message('Bitte einen gültigen Zeitraum wählen.'); return; }
+ const weekdays=new Set([...document.querySelectorAll('[data-plan-weekday]:checked')].map(input=>Number(input.value)));
+ if(!weekdays.size) { message('Bitte mindestens einen Wochentag auswählen.'); return; }
+ const dates=[]; let count=0,excluded=0;
+ for(let date=from;date<=to;date=addDays(date,1)) {
+  if(++count>370) { message('Bitte einen Zeitraum von maximal 370 Tagen auswählen.'); return; }
+  if(vacationWorkday(date)&&weekdays.has(dateObj(date).getDay())) dates.push(date);
+  else excluded++;
+ }
+ calendarSelection=new Set(dates); calendarMulti=true; selected=dates[0]||null;
+ month=new Date(dateObj(dates[0]||from).getFullYear(),dateObj(dates[0]||from).getMonth(),1);
+ renderCalendar();
+ message(dates.length+' Tage ausgewählt. '+excluded+' Tage wegen Wochentagsfilter, Wochenende oder Feiertag ausgenommen. Du kannst die Auswahl im Kalender anpassen und anschließend übernehmen.');
+ $('calendarCard').scrollIntoView({block:'start'});
+}
+function changeCalendarPlans(action) {
+ const previous=data; let stored;
+ try {
+  stored=localStorage.getItem('arbeitszeit-v3');
+  data={...data,entries:{...data.entries},planned:[...data.planned]};
+  action();
+ } catch {
+  data=previous;
+  try {
+   if(localStorage.getItem('arbeitszeit-v3')!==stored) {
+    if(stored===null) localStorage.removeItem('arbeitszeit-v3');
+    else if(stored!==undefined) localStorage.setItem('arbeitszeit-v3',stored);
+   }
+  } catch { /* Keep the original in-memory data if browser storage is blocked. */ }
+  render();
+  $('planInfo').textContent='Die Änderung konnte nicht gespeichert werden. Deine bisherigen Daten wurden beibehalten.';
+ }
+}
+function planCalendarSelection() {
+ const dates=calendarDates();
+ if(dates.length) changeCalendarPlans(()=>enterVacationDays(dates));
+}
+function removeCalendarPlans() {
+ const dates=new Set(calendarDates()),count=data.planned.filter(d=>dates.has(d)).length;
+ if(!count) return;
+ changeCalendarPlans(()=>{
+  data.planned=data.planned.filter(d=>!dates.has(d));
+  save();
+  $('planInfo').textContent=count+' Urlaubsplanungen entfernt. Bereits gebuchte Tage bleiben erhalten.';
+ });
+}
+function finishCalendarDrag(cancelled=false) {
+ if(!calendarDrag) return;
+ const gesture=calendarDrag; calendarDrag=null;
+ if(!gesture.dragging) return;
+ if(cancelled) { calendarSelection=gesture.before; calendarMulti=gesture.beforeMulti; }
+ suppressCalendarClick=true;
+ setTimeout(()=>{suppressCalendarClick=false;},0);
+ renderCalendar();
+}
+function initCalendarSelection() {
+ $('calendarMulti').onclick=toggleCalendarMulti;
+ $('clearCalendarSelection').onclick=clearCalendarSelection;
+ $('planRange').onclick=selectCalendarRange;
+ $('planWeekdaysAll').onclick=()=>document.querySelectorAll('[data-plan-weekday]').forEach(input=>{input.checked=true;});
+ $('planWeekdaysNone').onclick=()=>document.querySelectorAll('[data-plan-weekday]').forEach(input=>{input.checked=false;});
+ $('calendar').onclick=clickCalendarDay;
+ $('planSelected').onclick=planCalendarSelection;
+ $('removeSelected').onclick=removeCalendarPlans;
+ // Mouse drag paints one consistent add/remove operation; touch keeps normal scrolling.
+ $('calendar').addEventListener('pointerdown',event=>{
+  suppressCalendarClick=false;
+  const button=event.target.closest('[data-day]');
+  if(event.pointerType!=='mouse'||event.button!==0||!button) return;
+  const date=button.dataset.day;
+  if(!selectableCalendarDay(date)) return;
+  calendarDrag={pointer:event.pointerId,date,x:event.clientX,y:event.clientY,add:!calendarSelection.has(date),visited:new Set(),dragging:false,before:new Set(calendarSelection),beforeMulti:calendarMulti};
+ });
+ document.addEventListener('pointermove',event=>{
+  const gesture=calendarDrag;
+  if(!gesture||event.pointerId!==gesture.pointer||(event.buttons&1)===0) return;
+  if(!gesture.dragging&&Math.hypot(event.clientX-gesture.x,event.clientY-gesture.y)<5) return;
+  gesture.dragging=true; calendarMulti=true;
+  const button=document.elementFromPoint(event.clientX,event.clientY)?.closest('#calendar [data-day]');
+  for(const date of [gesture.date,button?.dataset.day].filter(Boolean)) {
+   if(gesture.visited.has(date)||!selectableCalendarDay(date)) continue;
+   gesture.visited.add(date); selected=date;
+   if(gesture.add) calendarSelection.add(date); else calendarSelection.delete(date);
+  }
+  renderCalendarSelection();
+ });
+ document.addEventListener('pointerup',event=>{if(calendarDrag?.pointer===event.pointerId)finishCalendarDrag();});
+ document.addEventListener('pointercancel',event=>{if(calendarDrag?.pointer===event.pointerId)finishCalendarDrag(true);});
+ window.addEventListener('blur',()=>finishCalendarDrag());
+}
+
 function renderCalendar() {
  const year=month.getFullYear(), m=month.getMonth();
  $('monthLabel').textContent=month.toLocaleDateString('de-AT',{month:'long',year:'numeric'});
@@ -57,7 +197,7 @@ function renderCalendar() {
   if(holiday) holidayList.push('<li><strong>'+formatDate(date)+'</strong> · '+escapeHtml(holiday)+(extra?' · bei dir arbeitsfrei':'')+'</li>');
   const marker=holiday?'Frei':used?'Urlaub':planned?'Plan':'';
   const label=formatDate(date)+(holiday?' · '+holiday+' · arbeitsfrei, kein Urlaubsverbrauch':used?' · Urlaub erfasst':planned?' · Urlaub geplant':'');
-  html+='<button type="button" data-day="'+date+'" class="day '+(holiday?'holiday':used?'used':planned?'plan':'')+' '+(selected===date?'selected':'')+'" aria-label="'+escapeHtml(label)+'" aria-pressed="'+(selected===date)+'"'+(holiday?' title="'+escapeHtml(holiday)+'"':'')+'>'+day+(marker?'<span class="dot">'+marker+'</span>':'')+'</button>';
+  html+='<button type="button" data-day="'+date+'" class="day '+(holiday?'holiday':used?'used':planned?'plan':'')+' '+(calendarSelection.has(date)?'selected':'')+'" aria-label="'+escapeHtml(label)+'" aria-pressed="'+calendarSelection.has(date)+'"'+(holiday?' title="'+escapeHtml(holiday)+'"':'')+'>'+day+(marker?'<span class="dot">'+marker+'</span>':'')+'</button>';
  }
  $('calendar').innerHTML=html;
  $('calendarHolidays').innerHTML=holidayList.length?'<strong>Feiertage und arbeitsfreie Tage</strong><ul>'+holidayList.join('')+'</ul>':'<span>Keine Feiertage oder zusätzlichen arbeitsfreien Tage in diesem Monat.</span>';
@@ -71,9 +211,7 @@ function renderCalendar() {
   else if(!holiday&&!weekend(selected)) details.push('Noch nicht geplant');
   $('chosenDate').textContent=details.join(' · ');
  } else $('chosenDate').textContent='Wähle einen Tag im Kalender.';
- $('planSelected').textContent=selected&&selected<=todayStr?'Urlaub erfassen':'Tag planen';
- $('planSelected').disabled=!selected||!vacationWorkday(selected)||data.planned.includes(selected)||!!data.entries[selected];
- $('removeSelected').disabled=!selected||!data.planned.includes(selected);
+ renderCalendarSelection();
 }
 
 function annualDates(until){let out=[];for(let y=dateObj(data.startDate).getFullYear();y<=dateObj(until).getFullYear();y++){let d=`${y}-04-01`;if(d>data.startDate&&d<=until)out.push(d)}return out}function vacationAt(until){let n=Number(data.initialVacation)||0;if(until<data.startDate)return n;for(let d of annualDates(until))n+=Number(data.annualVacation)||0;for(let c of data.credits)if(c.date>=data.startDate&&c.date<=until)n+=Number(c.days)||0;for(let [date,e] of Object.entries(data.entries))if(date>=data.startDate&&date<=until&&e.type==='TU'&&vacationWorkday(date))n--;for(let d of data.planned)if(d>=data.startDate&&d<=until&&!data.entries[d]&&vacationWorkday(d))n--;return n}function futureApril(){let y=today.getFullYear();return todayStr<`${y}-04-01`?`${y}-04-01`:`${y+1}-04-01`}function forecastEnd(){let ds=[todayStr,futureApril(),...data.planned.filter(d=>d>=todayStr&&vacationWorkday(d)),...Object.keys(data.entries).filter(d=>d>=todayStr&&data.entries[d].type==='TU'&&vacationWorkday(d))];return ds.sort().at(-1)}function warnings(){let current=vacationAt(todayStr);if(current<0)return `⚠️ Aktuell fehlen ${fmt(-current)} Urlaubstage. Der eingetragene Urlaub bleibt gespeichert.`;let ds=[...new Set([...data.planned,...Object.keys(data.entries).filter(d=>data.entries[d].type==='TU')])].filter(d=>d>=todayStr&&vacationWorkday(d)).sort();let first=ds.find(d=>vacationAt(d)<0);return first?`⚠️ Am ${formatDate(first)} fehlen voraussichtlich ${fmt(-vacationAt(first))} Urlaubstage. Die Planung bleibt trotzdem gespeichert.`:''}function weekKey(s){let d=dateObj(s),dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow+3);let y=d.getFullYear(),jan4=new Date(y,0,4,12);let wd=(jan4.getDay()+6)%7;jan4.setDate(jan4.getDate()-wd+3);return `${y}-KW${String(1+Math.round((d-jan4)/604800000)).padStart(2,'0')}`}
@@ -275,9 +413,7 @@ function deleteEntry(date) {
  status.hidden = false;
 }
 
-function resetEntry(){editing=null;$('entryForm').reset();$('entryDate').value=todayStr;$('entryBreak').value=data.defaultBreak;$('entryInfo').hidden=true;toggleWork();applyEntryShift();renderEntryCalculation()}function toggleWork(){$('workFields').hidden=$('entryType').value!=='Arbeit';renderEntryShiftHint();renderEntryCalculation()}function editEntry(d){let e=data.entries[d];if(!e)return;editing=d;$('entryDate').value=d;$('entryType').value=e.type;$('entryStart').value=e.start||'06:00';$('entryEnd').value=e.end||'14:00';$('entryBreak').value=e.break??data.defaultBreak;$('entryPayout').value=e.payout||'time';$('entry50').value=e.override50??'';$('entry100').value=e.override100??'';$('entryNote').value=e.note||'';toggleWork();switchTab('entry');$('entryWorkplace').value=e.workplace||'';window.scrollTo(0,0)}function init(){$('appVersion').textContent='V '+APP_VERSION;$('resetData').onclick=showResetDataDialog;$('cancelResetData').onclick=()=>$('resetDataDialog').close();$('confirmResetData').onclick=resetAllAppData;if(realizePastVacation())localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$('entryType').onchange=toggleWork;$('entryReset').onclick=resetEntry;$('entryForm').onsubmit=e=>{e.preventDefault();let d=$('entryDate').value,type=$('entryType').value;if(!d)return;let item={type,start:$('entryStart').value,end:$('entryEnd').value,break:Number($('entryBreak').value),payout:$('entryPayout').value,override50:$('entry50').value===''?null:Number($('entry50').value),override100:$('entry100').value===''?null:Number($('entry100').value),note:$('entryNote').value,workplace:$('entryWorkplace').value};if(type==='Arbeit'){let entries={...data.entries};if(editing&&editing!==d)delete entries[editing];entries[d]=item;let result=TimeEngine.calculate(entries,shiftForDate)[d];if(result.error){alert(result.error);return}if([item.override50,item.override100].some(v=>v!==null&&(!Number.isFinite(v)||v<0))){alert('Bitte gültige Überstundenwerte eingeben.');return}} if(editing&&editing!==d)delete data.entries[editing];data.entries[d]=item;if(type==='TU')data.planned=data.planned.filter(x=>x!==d);save();$('entryInfo').hidden=false;$('entryInfo').textContent='Tag gespeichert. Du kannst ihn unten erneut bearbeiten.';editing=d;renderEntryCalculation()};$('recent').onclick=entryListAction;$('entryList').onclick=entryListAction;$('monthPrev').onclick=()=>{month.setMonth(month.getMonth()-1);selected=null;renderCalendar()};$('monthNext').onclick=()=>{month.setMonth(month.getMonth()+1);selected=null;renderCalendar()};$('calendar').onclick=e=>{let b=e.target.closest('[data-day]');if(b){selected=b.dataset.day;renderCalendar()}};$('planSelected').onclick=()=>{if(selected&&vacationWorkday(selected))enterVacationDays([selected])};
-$('removeSelected').onclick=()=>{data.planned=data.planned.filter(x=>x!==selected);save()};
-$('planRange').onclick=()=>{let a=$('planFrom').value,b=$('planTo').value;if(!a||!b||b<a){$('planInfo').innerHTML='<div class="notice warning">Bitte einen gültigen Zeitraum wählen.</div>';return}let dates=[];for(let d=a;d<=b;d=addDays(d,1)){if(dates.length===370){$('planInfo').innerHTML='<div class="notice warning">Bitte einen Zeitraum von maximal 370 Tagen auswählen.</div>';return}dates.push(d)}enterVacationDays(dates)};
+function resetEntry(){editing=null;$('entryForm').reset();$('entryDate').value=todayStr;$('entryBreak').value=data.defaultBreak;$('entryInfo').hidden=true;toggleWork();applyEntryShift();renderEntryCalculation()}function toggleWork(){$('workFields').hidden=$('entryType').value!=='Arbeit';renderEntryShiftHint();renderEntryCalculation()}function editEntry(d){let e=data.entries[d];if(!e)return;editing=d;$('entryDate').value=d;$('entryType').value=e.type;$('entryStart').value=e.start||'06:00';$('entryEnd').value=e.end||'14:00';$('entryBreak').value=e.break??data.defaultBreak;$('entryPayout').value=e.payout||'time';$('entry50').value=e.override50??'';$('entry100').value=e.override100??'';$('entryNote').value=e.note||'';toggleWork();switchTab('entry');$('entryWorkplace').value=e.workplace||'';window.scrollTo(0,0)}function init(){$('appVersion').textContent='V '+APP_VERSION;$('resetData').onclick=showResetDataDialog;$('cancelResetData').onclick=()=>$('resetDataDialog').close();$('confirmResetData').onclick=resetAllAppData;if(realizePastVacation())localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$('entryType').onchange=toggleWork;$('entryReset').onclick=resetEntry;$('entryForm').onsubmit=e=>{e.preventDefault();let d=$('entryDate').value,type=$('entryType').value;if(!d)return;let item={type,start:$('entryStart').value,end:$('entryEnd').value,break:Number($('entryBreak').value),payout:$('entryPayout').value,override50:$('entry50').value===''?null:Number($('entry50').value),override100:$('entry100').value===''?null:Number($('entry100').value),note:$('entryNote').value,workplace:$('entryWorkplace').value};if(type==='Arbeit'){let entries={...data.entries};if(editing&&editing!==d)delete entries[editing];entries[d]=item;let result=TimeEngine.calculate(entries,shiftForDate)[d];if(result.error){alert(result.error);return}if([item.override50,item.override100].some(v=>v!==null&&(!Number.isFinite(v)||v<0))){alert('Bitte gültige Überstundenwerte eingeben.');return}} if(editing&&editing!==d)delete data.entries[editing];data.entries[d]=item;if(type==='TU')data.planned=data.planned.filter(x=>x!==d);save();$('entryInfo').hidden=false;$('entryInfo').textContent='Tag gespeichert. Du kannst ihn unten erneut bearbeiten.';editing=d;renderEntryCalculation()};$('recent').onclick=entryListAction;$('entryList').onclick=entryListAction;$('monthPrev').onclick=()=>{month.setMonth(month.getMonth()-1);selected=null;renderCalendar()};$('monthNext').onclick=()=>{month.setMonth(month.getMonth()+1);selected=null;renderCalendar()};initCalendarSelection();
 for(let y=today.getFullYear()-3;y<=today.getFullYear()+5;y++)$('yearSelect').add(new Option(String(y),String(y)));$('yearSelect').value=String(today.getFullYear());$('yearSelect').onchange=chooseYearMonth;
 document.querySelectorAll('[data-year-measure]').forEach(b=>b.onclick=()=>{yearMeasure=b.dataset.yearMeasure;renderYear()});
 $('yearBars').onclick=e=>{let b=e.target.closest('[data-year-month]');if(b){yearMonth=Number(b.dataset.yearMonth);renderYear()}};
@@ -413,6 +549,7 @@ async function importBackup(event) {
    // Past plans become booked vacation using the existing application rule.
    realizePastVacation();
    localStorage.setItem('arbeitszeit-v3', JSON.stringify(data));
+   calendarSelection.clear(); calendarMulti=false; calendarDrag=null;
    selected = null;
    month = new Date(today.getFullYear(), today.getMonth(), 1);
    calculationCache = null;
