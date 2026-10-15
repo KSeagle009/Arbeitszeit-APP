@@ -169,4 +169,158 @@ $('shiftList').onclick=e=>{let b=e.target.closest('[data-editshift]');if(b){$('s
 $('addCustomShift').onclick=()=>{let s=$('customShiftStart').value+'-'+$('customShiftEnd').value;if(!validShift(s)){$('customShiftInfo').textContent='Bitte gültige, unterschiedliche Uhrzeiten eingeben.';return}if(!standardShifts.includes(s)&&!data.customShifts.includes(s))data.customShifts.push(s);let selected=$('shiftSelect').value,days=dayNames.map((_,i)=>$('shiftDay'+i)?.value||'');$('shiftSelect').innerHTML=shiftOptions();$('shiftSelect').value=s;for(let i=0;i<7;i++){let el=$('shiftDay'+i);if(el){el.innerHTML='<option value="">Wochenschicht übernehmen</option>'+shiftOptions();el.value=days[i]}}save();$('customShiftInfo').textContent='Schicht '+s.replace('-','–')+' hinzugefügt und ausgewählt. Mit „Wochenplan speichern“ zuweisen.'};
 $('entryDate').onchange=()=>{let s=$('entryDate').value;if(!s)return;if(data.entries[s]){editEntry(s);return}editing=null;$('entryInfo').hidden=true;applyEntryShift();renderEntryCalculation()};
 for(let id of ['entryStart','entryEnd'])$(id).oninput=()=>{entryTimesTouched=true;renderEntryCalculation()};for(let id of ['entryBreak','entryPayout','entry50','entry100'])$(id).addEventListener('input',renderEntryCalculation);
-$('addCredit').onclick=()=>{let d=$('creditDate').value,n=Number($('creditDays').value);if(d&&Number.isFinite(n)&&n!==0){data.credits.push({date:d,days:n});save()}};$('creditList').onclick=e=>{let b=e.target.closest('[data-deletecredit]');if(b){data.credits.splice(Number(b.dataset.deletecredit),1);save()}};$('exportData').onclick=()=>{let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='arbeitszeit-backup-'+todayStr+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)};$('importData').onchange=async e=>{let file=e.target.files[0];if(!file)return;try{let v=JSON.parse(await file.text());if(!v||typeof v!=='object'||!v.entries||!v.planned)throw Error();if(confirm('Aktuelle Daten durch dieses Backup ersetzen?')){data={...defaultData,...v};save();fillSettings()}}catch{alert('Ungültige Backup-Datei.')}};$('entryDate').value=todayStr;$('shiftDate').value=todayStr;$('creditDate').value=todayStr;$('planFrom').value=todayStr;$('planTo').value=todayStr;fillSettings();resetEntry();render()}function fillSettings(){for(let k of ['initialVacation','initialTime','defaultBreak','annualVacation','startDate','theme'])$(k).value=data[k];$('shiftDate').dispatchEvent(new Event('change'))}init()})();
+$('addCredit').onclick=()=>{let d=$('creditDate').value,n=Number($('creditDays').value);if(d&&Number.isFinite(n)&&n!==0){data.credits.push({date:d,days:n});save()}};$('creditList').onclick=e=>{let b=e.target.closest('[data-deletecredit]');if(b){data.credits.splice(Number(b.dataset.deletecredit),1);save()}};$('exportData').onclick=exportBackup;$('importData').onchange=importBackup;$('entryDate').value=todayStr;$('shiftDate').value=todayStr;$('creditDate').value=todayStr;$('planFrom').value=todayStr;$('planTo').value=todayStr;fillSettings();resetEntry();render()}// Complete backup and restore. Calculations and normal entry saving stay unchanged.
+const backupFormat = 'arbeitszeit-backup', backupVersion = 1;
+function backupMessage(text, kind = '') {
+ const status = $('backupStatus');
+ status.hidden = false;
+ status.className = 'notice ' + kind;
+ status.textContent = text;
+}
+function backupDate(value) {
+ return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+  Number.isFinite(dateObj(value).getTime()) && dateISO(dateObj(value)) === value;
+}
+function validateBackup(input) {
+ const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+ const number = value => typeof value === 'number' && Number.isFinite(value);
+ const time = value => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+ const check = (condition, message) => { if (!condition) throw new Error(message); };
+ // Do not allow special object keys to reach application maps or merges.
+ function checkKeys(value) {
+  if (!value || typeof value !== 'object') return;
+  for (const key of Object.keys(value)) {
+   check(!['__proto__', 'prototype', 'constructor'].includes(key), 'Die Datei enthält ungültige Datenfelder.');
+   checkKeys(value[key]);
+  }
+ }
+ check(object(input), 'Bitte eine Sicherungsdatei dieser Arbeitszeit-App auswählen.');
+ checkKeys(input);
+ let raw = input;
+ if ('format' in input || 'version' in input || 'data' in input) {
+  check(input.format === backupFormat, 'Diese Datei ist keine Sicherung dieser Arbeitszeit-App.');
+  check(input.version === backupVersion, 'Diese Sicherungsversion wird nicht unterstützt. Bitte die passende App-Version verwenden.');
+  check(typeof input.createdAt === 'string' && Number.isFinite(Date.parse(input.createdAt)), 'Das Sicherungsdatum ist ungültig.');
+  raw = input.data;
+ }
+ check(object(raw) && object(raw.entries) && Array.isArray(raw.planned), 'Die Datei enthält keine vollständigen Tages- und Planungsdaten.');
+ const restored = {...JSON.parse(JSON.stringify(defaultData)), ...raw};
+ // Keep the selected theme when loading a backup from before the design migration.
+ restored.designVersion = 'teal-design-2';
+ check(backupDate(restored.startDate), 'Das Startdatum in der Sicherung ist ungültig.');
+ for (const key of ['initialVacation', 'initialTime', 'defaultBreak', 'annualVacation']) {
+  check(number(restored[key]), 'Ein Saldo oder Einstellungswert in der Sicherung ist ungültig.');
+ }
+ check(restored.defaultBreak >= 0 && restored.annualVacation >= 0, 'Pause und jährliche Urlaubsgutschrift dürfen nicht negativ sein.');
+ check(['dark', 'light'].includes(restored.theme), 'Die Darstellung in der Sicherung ist ungültig.');
+ check(Array.isArray(restored.workplaces) && restored.workplaces.every(v => typeof v === 'string'), 'Die Arbeitsplätze in der Sicherung sind ungültig.');
+ check(Array.isArray(restored.customShifts) && restored.customShifts.every(validShift), 'Die eigenen Schichten in der Sicherung sind ungültig.');
+ check(object(restored.shifts) && object(restored.shiftDays), 'Die Schichtpläne in der Sicherung sind ungültig.');
+ for (const [week, shift] of Object.entries(restored.shifts)) {
+  check(!!dateForWeek(week) && validShift(shift), 'Ein Wochen-Schichtplan in der Sicherung ist ungültig.');
+ }
+ for (const [week, days] of Object.entries(restored.shiftDays)) {
+  check(!!dateForWeek(week) && object(days), 'Ein Tages-Schichtplan in der Sicherung ist ungültig.');
+  for (const [day, shift] of Object.entries(days)) {
+   check(/^[0-6]$/.test(day) && validShift(shift), 'Eine Tagesschicht in der Sicherung ist ungültig.');
+  }
+ }
+ check(restored.planned.every(backupDate), 'Ein geplantes Urlaubsdatum ist ungültig.');
+ check(new Set(restored.planned).size === restored.planned.length, 'Die Sicherung enthält doppelte Urlaubsplanungen.');
+ check(Array.isArray(restored.credits) && restored.credits.every(c => object(c) && backupDate(c.date) && number(c.days)), 'Eine Urlaubsgutschrift in der Sicherung ist ungültig.');
+ for (const [date, entry] of Object.entries(restored.entries)) {
+  check(backupDate(date) && object(entry) && ['Arbeit', 'TU', 'ZA', 'KK', 'Feiertag', 'Frei'].includes(entry.type), 'Ein gespeicherter Tag in der Sicherung ist ungültig.');
+  if (entry.type === 'Arbeit') {
+   check(time(entry.start) && time(entry.end), 'Eine Arbeitszeit in der Sicherung ist ungültig.');
+  }
+  if ('break' in entry) check(number(entry.break) && entry.break >= 0, 'Eine Pause in der Sicherung ist ungültig.');
+  if ('payout' in entry) check(['time', 'pay'].includes(entry.payout), 'Eine Überstundenbehandlung in der Sicherung ist ungültig.');
+  for (const key of ['override50', 'override100']) {
+   if (key in entry) check(entry[key] === null || (number(entry[key]) && entry[key] >= 0), 'Eine manuelle Überstundenkorrektur ist ungültig.');
+  }
+  for (const key of ['note', 'workplace']) {
+   if (key in entry) check(typeof entry[key] === 'string', 'Eine Bemerkung oder ein Arbeitsplatz ist ungültig.');
+  }
+ }
+ return {data: restored, createdAt: raw === input ? null : input.createdAt};
+}
+function exportBackup() {
+ let url;
+ try {
+  const createdAt = new Date();
+  const payload = {format: backupFormat, version: backupVersion, createdAt: createdAt.toISOString(), data};
+  validateBackup(payload);
+  const stamp = dateISO(createdAt) + '-' + [createdAt.getHours(), createdAt.getMinutes(), createdAt.getSeconds()].map(v => String(v).padStart(2, '0')).join('');
+  const filename = 'arbeitszeit-backup-' + stamp + '.json';
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+  url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  const downloadUrl = url;
+  setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
+  backupMessage('Sicherungsdatei erstellt: ' + filename + '. Bitte den Download abschließen und die Datei aufbewahren. Auf dem iPhone kannst du sie in „Dateien“ oder iCloud Drive ablegen.', 'success');
+ } catch (error) {
+  if (url) URL.revokeObjectURL(url);
+  backupMessage('Sicherung konnte nicht erstellt werden. ' + error.message, 'warning');
+ }
+}
+async function importBackup(event) {
+ const input = event.target, file = input.files[0];
+ if (!file) return;
+ const exportButton = $('exportData');
+ input.disabled = true;
+ exportButton.disabled = true;
+ try {
+  if (file.size > 20 * 1024 * 1024) throw new Error('Die Datei ist zu groß (maximal 20 MB).');
+  let parsed;
+  try { parsed = JSON.parse(await file.text()); }
+  catch { throw new Error('Die Datei ist keine lesbare JSON-Sicherungsdatei.'); }
+  const backup = validateBackup(parsed), restored = backup.data;
+  const days = Object.keys(restored.entries).length, weeks = new Set([...Object.keys(restored.shifts), ...Object.keys(restored.shiftDays)]).size;
+  const summary = days + ' erfasste Tage, ' + restored.planned.length + ' geplante Urlaubstage, ' + weeks + ' Schichtwochen und alle Einstellungen.';
+  const date = backup.createdAt ? '\nErstellt am ' + new Date(backup.createdAt).toLocaleString('de-AT') + '.' : '\nBisheriges Backup-Format.';
+  if (!confirm('Sicherung wiederherstellen?\n\n' + summary + date + '\n\nAlle derzeitigen App-Daten werden durch diese Sicherung ersetzt. Möchtest du fortfahren?')) {
+   backupMessage('Wiederherstellung abgebrochen. Deine bisherigen Daten bleiben erhalten.');
+   return;
+  }
+  const previous = data, previousStored = localStorage.getItem('arbeitszeit-v3');
+  try {
+   data = restored;
+   // Past plans become booked vacation using the existing application rule.
+   realizePastVacation();
+   localStorage.setItem('arbeitszeit-v3', JSON.stringify(data));
+   selected = null;
+   month = new Date(today.getFullYear(), today.getMonth(), 1);
+   calculationCache = null;
+   render();
+   fillSettings();
+   resetEntry();
+   $('planInfo').textContent = '';
+   $('shiftInfo').textContent = 'Sicherung wiederhergestellt. ' + $('shiftInfo').textContent;
+  } catch (error) {
+   data = previous;
+   if (localStorage.getItem('arbeitszeit-v3') !== previousStored) {
+    if (previousStored === null) localStorage.removeItem('arbeitszeit-v3');
+    else localStorage.setItem('arbeitszeit-v3', previousStored);
+   }
+   calculationCache = null;
+   render();
+   fillSettings();
+   resetEntry();
+   throw new Error('Die Wiederherstellung konnte nicht gespeichert werden. Deine bisherigen Daten bleiben erhalten.');
+  }
+  backupMessage('Sicherung erfolgreich wiederhergestellt: ' + summary, 'success');
+ } catch (error) {
+  backupMessage(error.message + ' Es wurden keine neuen Daten übernommen.', 'warning');
+ } finally {
+  input.value = '';
+  input.disabled = false;
+  exportButton.disabled = false;
+ }
+}
+
+function fillSettings(){for(let k of ['initialVacation','initialTime','defaultBreak','annualVacation','startDate','theme'])$(k).value=data[k];$('shiftDate').dispatchEvent(new Event('change'))}init()})();
