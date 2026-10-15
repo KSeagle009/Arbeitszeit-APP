@@ -39,8 +39,8 @@
 <div class="report-controls" id="reportControls-range" hidden><div class="split"><div><label for="reportFrom">Von</label><input type="date" id="reportFrom"></div><div><label for="reportTo">Bis</label><input type="date" id="reportTo"></div></div></div>
 <div class="mini report-range-info" id="reportRangeInfo" aria-live="polite"></div>
 <label for="reportCsvFormat">CSV-Format für Excel</label><select id="reportCsvFormat"><option value="at">Österreich: Dezimalkomma, Semikolon</option><option value="international">International: Dezimalpunkt, Komma</option></select>
-<div class="row" style="margin-top:14px"><button type="button" id="exportCsv">CSV exportieren</button><button type="button" class="secondary" id="printData">Drucken</button></div>
-<p class="mini">CSV ist für Auswertungen in Excel gedacht. Für eine vollständige Wiederherstellung verwende weiterhin „Alle Daten sichern“.</p>
+<div class="row" style="margin-top:14px"><button type="button" id="exportExcel">Excel exportieren (.xlsx)</button><button type="button" class="secondary" id="exportCsv">CSV exportieren</button><button type="button" class="secondary" id="printData">Drucken</button></div>
+<p class="mini">Excel enthält gestaltete Monatsblätter und eine Jahresübersicht nach deiner Vorlage. CSV bleibt für eigene Auswertungen verfügbar. Für eine vollständige Wiederherstellung verwende weiterhin „Alle Daten sichern“.</p>
 <div id="reportStatus" class="notice" role="status" aria-live="polite" hidden></div>
 </div><div class="card" id="backupCard">
 <h3>Datensicherung und Wiederherstellung</h3>
@@ -65,4 +65,4 @@
 <p>Das Löschen kann nur mit einer zuvor gespeicherten Sicherungsdatei rückgängig gemacht werden.</p>
 <div id="resetDataError" class="notice warning" role="alert" hidden></div>
 <div class="row"><button type="button" class="secondary" id="cancelResetData" autofocus>Abbrechen</button><button type="button" class="danger" id="confirmResetData">Alles löschen</button></div>
-</dialog><article id="printReport" aria-label="Arbeitszeitnachweis"></article><script src="app.js?v=bbe83985ab44"></script></body></html>
+</dialog><article id="printReport" aria-label="Arbeitszeitnachweis"></article><script src="app.js?v=34bda76d883d"></script></body></html>

@@ -1,5 +1,5 @@
 
-(()=>{'use strict';const APP_VERSION='0.3';const $=id=>document.getElementById(id),today=new Date(),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,todayStr=dateISO(today),dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay()),defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data;try{data={...defaultData,...JSON.parse(localStorage.getItem('arbeitszeit-v3')||'{}')}}catch{data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false;function save(){realizePastVacation();localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));render()}
+(()=>{'use strict';const APP_VERSION='0.4';const $=id=>document.getElementById(id),today=new Date(),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,todayStr=dateISO(today),dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay()),defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data;try{data={...defaultData,...JSON.parse(localStorage.getItem('arbeitszeit-v3')||'{}')}}catch{data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false;function save(){realizePastVacation();localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));render()}
 // Vacation calendar: statutory Austrian holidays plus the user's free days.
 // The extra free days do not change the separate overtime premium rules.
 function vacationHolidayName(date) {
@@ -715,11 +715,93 @@ function printReport() {
   window.print();
  } catch(error) {document.body.classList.remove('printing-report');reportMessage('Druckansicht konnte nicht erstellt werden. '+error.message,true);}
 }
+// Excel export stays entirely on the device; OOXML text cells never become formulas.
+function excelXml(value) {
+ return String(value??'').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+function excelColumn(index) {let name='';for(index++;index;index=Math.floor((index-1)/26))name=String.fromCharCode(65+(index-1)%26)+name;return name;}
+function excelZip(files) {
+ const encode=new TextEncoder(),parts=[],central=[];let offset=0;
+ const table=Array.from({length:256},(_,n)=>{for(let k=0;k<8;k++)n=n&1?0xedb88320^(n>>>1):n>>>1;return n>>>0;});
+ const header=(length,values)=>{const bytes=new Uint8Array(length),v=new DataView(bytes.buffer);for(const [at,size,value] of values)size===2?v.setUint16(at,value,true):v.setUint32(at,value,true);return bytes;};
+ for(const [path,text] of files){
+  const name=encode.encode(path),bytes=encode.encode(text);let crc=0xffffffff;for(const byte of bytes)crc=table[(crc^byte)&255]^(crc>>>8);crc=(crc^0xffffffff)>>>0;
+  const local=header(30,[[0,4,0x04034b50],[4,2,20],[6,2,0x800],[12,2,33],[14,4,crc],[18,4,bytes.length],[22,4,bytes.length],[26,2,name.length]]);
+  parts.push(local,name,bytes);
+  central.push(header(46,[[0,4,0x02014b50],[4,2,20],[6,2,20],[8,2,0x800],[14,2,33],[16,4,crc],[20,4,bytes.length],[24,4,bytes.length],[28,2,name.length],[42,4,offset]]),name);
+  offset+=local.length+name.length+bytes.length;
+ }
+ const length=central.reduce((n,x)=>n+x.length,0);
+ return new Blob([...parts,...central,header(22,[[0,4,0x06054b50],[8,2,files.length],[10,2,files.length],[12,4,length],[16,4,offset]])],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+function excelStyles() {
+ const fills=['none','gray125','17343C','DEF3EF','F1F3F5','FFF0C2','FFDCDC'];
+ const formats=['General','General','General','0.00;[Red]-0.00','dd.mm.yyyy','hh:mm','[h]:mm','General','General','General','General','0.00;[Red]-0.00'];
+ const fill=[0,2,3,0,0,0,0,4,5,6,0,3];
+ return '<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="5">'+[[164,formats[3]],[165,formats[4]],[166,formats[5]],[167,formats[6]],[168,'0.##']].map(([id,f])=>'<numFmt numFmtId="'+id+'" formatCode="'+excelXml(f)+'"/>').join('')+'</numFmts><fonts count="3"><font><sz val="11"/><name val="Calibri"/><color rgb="FF17343C"/></font><font><b/><sz val="11"/><name val="Calibri"/><color rgb="FFFFFFFF"/></font><font><b/><sz val="11"/><name val="Calibri"/><color rgb="FF17343C"/></font></fonts><fills count="7">'+fills.map((c,i)=>i<2?'<fill><patternFill patternType="'+c+'"/></fill>':'<fill><patternFill patternType="solid"><fgColor rgb="FF'+c+'"/><bgColor indexed="64"/></patternFill></fill>').join('')+'</fills><borders count="2"><border/><border><bottom style="hair"><color rgb="FFD9E1E5"/></bottom></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="12">'+formats.map((_,i)=>'<xf numFmtId="'+({3:164,4:165,5:166,6:167,11:164}[i]||0)+'" fontId="'+(i===1?1:[2,11].includes(i)?2:0)+'" fillId="'+fill[i]+'" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyFont="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>').join('')+'</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+}
+function excelSheet(rows,widths,merges=[],filterEnd=0) {
+ const count=widths.length,last=excelColumn(count-1),cell=(value,r,c)=>{
+  const item=value&&typeof value==='object'?value:{v:value},v=item.v,ref=excelColumn(c)+r,s=item.s||0;
+  if(item.f)return '<c r="'+ref+'" s="'+s+'"><f>'+excelXml(item.f)+'</f><v>'+Number(v||0)+'</v></c>';
+  return typeof v==='number'&&Number.isFinite(v)?'<c r="'+ref+'" s="'+s+'"><v>'+v+'</v></c>':'<c r="'+ref+'" s="'+s+'" t="inlineStr"><is><t xml:space="preserve">'+excelXml(v)+'</t></is></c>';
+ };
+ return '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:'+last+rows.length+'"/><sheetViews><sheetView workbookViewId="0" showGridLines="0"><pane ySplit="5" topLeftCell="A6" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="19"/><cols>'+widths.map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join('')+'</cols><sheetData>'+rows.map((row,i)=>'<row r="'+(i+1)+'"'+(i===0?' ht="27" customHeight="1"':i===4?' ht="42" customHeight="1"':i>=5&&i<filterEnd?' ht="48" customHeight="1"':'')+'>'+row.map((v,c)=>cell(v,i+1,c)).join('')+'</row>').join('')+'</sheetData>'+(filterEnd?'<autoFilter ref="A5:'+last+filterEnd+'"/>':'')+(merges.length?'<mergeCells count="'+merges.length+'">'+merges.map(ref=>'<mergeCell ref="'+ref+'"/>').join('')+'</mergeCells>':'')+'<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/><headerFooter><oddFooter>&amp;LArbeitszeit-App v'+APP_VERSION+'&amp;RSeite &amp;P / &amp;N</oddFooter></headerFooter></worksheet>';
+}
+function buildExcelReport(report) {
+ const months=[],byDate=new Map(report.rows.map(r=>[r.date,r])),results=TimeEngine.calculate(data.entries,shiftForDate);
+ for(let key=report.from.slice(0,7);key<=report.to.slice(0,7);){
+  if(months.length>=120)throw new Error('Bitte für den Excel-Export einen Zeitraum von höchstens 10 Jahren wählen.');
+  const [year,m]=key.split('-').map(Number),first=key+'-01',last=key+'-'+new Date(year,m,0).getDate();
+  months.push({key,from:first<report.from?report.from:first,to:last>report.to?report.to:last});
+  key=m===12?(year+1)+'-01':year+'-'+String(m+1).padStart(2,'0');
+ }
+ const number=v=>({v:round(Number(v)||0),s:3}),serial=date=>Date.UTC(...date.split('-').map((v,i)=>Number(v)-(i===1?1:0)))/86400000+25569;
+ const header=values=>values.map(v=>({v,s:1})),sheets=[],summary=[];
+ const sum=(rows,key)=>round(rows.reduce((n,r)=>n+(Number(r[key])||0),0));
+ for(const month of months){
+  const records=report.rows.filter(r=>r.date>=month.from&&r.date<=month.to),title=dateObj(month.from).toLocaleDateString('de-AT',{month:'long',year:'numeric'}),name=title.replace('Januar','Jänner');
+  const rows=[[{v:'Arbeitszeitnachweis · '+name,s:1}],[{v:formatDate(month.from)+' bis '+formatDate(month.to)+' · Erstellt '+new Date().toLocaleDateString('de-AT')+' · v'+APP_VERSION}],[{v:'Stunden als Dezimalzahl; Arbeitszeit zusätzlich in hh:mm. ZA+ enthält Zuschläge. Geplante/zukünftige Werte sind ausdrücklich gekennzeichnet.'}],[],header(['Datum','Tag','FZ / Tagesart','von','bis','Pause min','Arbeitszeit h','Arbeitszeit hh:mm','Ü 50 % h','Ü 100 % h','Ausz. Ü h','ZA+ h','ZA− h','Tätigkeit','Sonstiges / Feiertag','Status','Urlaub Tage','Geplant Tage'])];
+  for(let date=month.from;date<=month.to;date=addDays(date,1)){
+   const r=byDate.get(date),holiday=vacationHolidayName(date),style=r?.error?9:r?.status.includes('zukünftig')||r?.planned?8:holiday?2:weekend(date)?7:0;
+   const code=r?({'Urlaub':'TU','Urlaub geplant':'TU geplant','Krankenstand':'KK','Zeitausgleich':'ZA','Feiertag':'FT','Frei':'Frei','Arbeit':''}[r.type]??r.type):holiday?'FT':'';
+   const time=v=>v?{v:Number(v.slice(0,2))/24+Number(v.slice(3,5))/1440,s:5}:'';
+   rows.push([{v:serial(date),s:4},{v:dateObj(date).toLocaleDateString('de-AT',{weekday:'short'}),s:style},{v:code,s:style},time(r?.start),time(r?.end),r?.pause??'',r?number(r.worked):'',r?{v:r.worked/24,s:6}:'',r?number(r.h50):'',r?number(r.h100):'',r?number(r.payout==='Auszahlung'?r.overtime:0):'',r?number(Math.max(0,r.timeChange)):'',r?number(Math.max(0,-r.timeChange)):'',{v:r?.workplace||'',s:style},{v:[r?.note,holiday,r?.grant?'Urlaubsgutschrift: '+fmt(r.grant)+' Tage':''].filter(Boolean).join(' · '),s:style},{v:r?.status||'',s:style},r?number(r.vacation):'',r?number(r.planned):'']);
+  }
+  const end=rows.length,totalsRow=end+1;
+  rows.push(Array.from({length:18},(_,i)=>i===0?{v:'Summe',s:2}:[5,6,7,8,9,10,11,12,16,17].includes(i)?{f:'SUM('+excelColumn(i)+'6:'+excelColumn(i)+end+')',v:i===5?sum(records,'pause'):i===7?sum(records,'worked')/24:i===10?sum(records.filter(r=>r.payout==='Auszahlung'),'overtime'):i===11?sum(records.map(r=>({v:Math.max(0,r.timeChange)})),'v'):i===12?sum(records.map(r=>({v:Math.max(0,-r.timeChange)})),'v'):sum(records,({6:'worked',8:'h50',9:'h100',16:'vacation',17:'planned'})[i]),s:i===7?6:11}:{v:'',s:2}));
+  const cutoff=month.to<todayStr?month.to:todayStr,before=addDays(month.from,-1),openingTime=reportTimeAt(before,results),closingTime=reportTimeAt(month.to,results);
+  rows.push([],['Salden / Urlaub','Wert','Einheit'],['Zeittopf vor Zeitraum',number(openingTime),'h'],['Zeittopf Stand '+formatDate(cutoff),number(closingTime),'h'],['Urlaub vor Zeitraum (inkl. Planung)',number(vacationAt(before)),'Tage'],['Urlaubsgutschriften im Zeitraum',number(sum(records,'grant')),'Tage'],['Urlaub Stand '+formatDate(cutoff),number(vacationAt(cutoff)),'Tage'],['Urlaub Prognose bis '+formatDate(month.to),number(vacationAt(month.to)),'Tage'],[],['Legende: TU = Urlaub · KK = Krankenstand · ZA = Zeitausgleich · FT = Feiertag/arbeitsfrei'],['Salden ab '+formatDate(data.startDate)+'; Zeittopf nur gebucht bis heute. Die Datei ist ein Exportstand, kein App-Backup.']);
+  const balanceMerges=[];
+  for(let i=end+2;i<=end+8;i++){
+   const [label,value,unit]=rows[i];rows[i]=[{v:label,s:i===end+2?2:0},'','','','',value,unit];
+   balanceMerges.push('A'+(i+1)+':E'+(i+1));
+  }
+  sheets.push({name,xml:excelSheet(rows,[13,7,18,9,9,11,13,15,11,11,12,11,11,24,48,23,13,13],['A1:R1','A2:R2','A3:R3',...balanceMerges,'A'+(rows.length-1)+':R'+(rows.length-1),'A'+rows.length+':R'+rows.length],end)});
+  const ref="'"+name.replace(/'/g,"''")+"'!";
+  summary.push([{v:name},...['G','I','J','K','L','M','Q','R'].map((c,i)=>({f:ref+c+totalsRow,v:[sum(records,'worked'),sum(records,'h50'),sum(records,'h100'),sum(records.filter(r=>r.payout==='Auszahlung'),'overtime'),sum(records.map(r=>({v:Math.max(0,r.timeChange)})),'v'),sum(records.map(r=>({v:Math.max(0,-r.timeChange)})),'v'),sum(records,'vacation'),sum(records,'planned')][i],s:3})),number(closingTime),number(vacationAt(month.to)),{v:formatDate(cutoff)}]);
+ }
+ const overview=[[{v:'Jahresübersicht · Arbeitszeiten',s:1}],[{v:formatDate(report.from)+' bis '+formatDate(report.to)+' · v'+APP_VERSION}],[{v:'Summen beziehen sich ausschließlich auf den gewählten Zeitraum. Zeittopf = gebuchter Stand bis Stichtag; Urlaub = Prognose bis Zeitraumende.'}],[],header(['Monat','Arbeitszeit h','Ü 50 % h','Ü 100 % h','Ausz. Ü h','ZA+ h','ZA− h','Urlaub Tage','Geplant Tage','Zeittopf Stand h','Urlaub Prognose Tage','Stichtag Zeittopf']),...summary];
+ const last=overview.length;overview.push([{v:'Summe',s:2},...Array.from({length:8},(_,i)=>({f:'SUM('+excelColumn(i+1)+'6:'+excelColumn(i+1)+last+')',v:round(summary.reduce((n,r)=>n+r[i+1].v,0)),s:11})),{v:'Salden werden nicht summiert.',s:2}]);
+ overview.push([],['TU = Urlaub · KK = Krankenstand · ZA = Zeitausgleich · FT = Feiertag/arbeitsfrei'],['Geplant und zukünftig erfasst sind keine bereits geleisteten Stunden. Berechnungsfehler stehen im jeweiligen Monatsblatt.']);
+ sheets.unshift({name:'Jahresübersicht',xml:excelSheet(overview,[24,16,14,14,14,13,13,14,14,20,22,19],['A1:L1','A2:L2','A3:L3','J'+(last+1)+':L'+(last+1),'A'+(overview.length-1)+':L'+(overview.length-1),'A'+overview.length+':L'+overview.length],last)});
+ const ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main',rel='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+ const files=[['[Content_Types].xml','<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+sheets.map((_,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')+'</Types>'],['_rels/.rels','<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="'+rel+'/officeDocument" Target="xl/workbook.xml"/></Relationships>'],['xl/workbook.xml','<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="'+ns+'" xmlns:r="'+rel+'"><bookViews><workbookView/></bookViews><sheets>'+sheets.map((s,i)=>'<sheet name="'+excelXml(s.name)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join('')+'</sheets><definedNames>'+sheets.map((s,i)=>'<definedName name="_xlnm.Print_Titles" localSheetId="'+i+'">'+excelXml("'"+s.name+"'!$1:$5")+'</definedName>').join('')+'</definedNames><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>'],['xl/_rels/workbook.xml.rels','<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+sheets.map((_,i)=>'<Relationship Id="rId'+(i+1)+'" Type="'+rel+'/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join('')+'<Relationship Id="styles" Type="'+rel+'/styles" Target="styles.xml"/></Relationships>'],['xl/styles.xml',excelStyles()],...sheets.map((s,i)=>['xl/worksheets/sheet'+(i+1)+'.xml',s.xml])];
+ return excelZip(files);
+}
+function exportReportExcel() {
+ try {
+  const report=buildReport(),blob=buildExcelReport(report),url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download='arbeitszeiten-'+report.from+'-bis-'+report.to+'.xlsx';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  reportMessage('Excel-Datei mit Monatsblättern und Jahresübersicht erstellt.'+(report.errors?' '+report.errors+' Einträge enthalten gekennzeichnete Berechnungsfehler.':''),!!report.errors);
+ } catch(error){reportMessage('Excel-Datei konnte nicht erstellt werden. '+error.message,true);}
+}
+
 function initReports() {
  $('reportWeekDate').value=todayStr;$('reportMonth').value=todayStr.slice(0,7);$('reportYear').value=today.getFullYear();$('reportFrom').value=todayStr;$('reportTo').value=todayStr;
  $('reportPeriod').onchange=updateReportPeriod;
  for(const id of ['reportWeekDate','reportMonth','reportYear','reportFrom','reportTo']) $(id).addEventListener('input',updateReportPeriod);
- $('exportCsv').onclick=exportReportCsv;$('printData').onclick=printReport;
+ $('exportExcel').onclick=exportReportExcel;$('exportCsv').onclick=exportReportCsv;$('printData').onclick=printReport;
  window.addEventListener('afterprint',()=>document.body.classList.remove('printing-report'));
  updateReportPeriod();
 }
