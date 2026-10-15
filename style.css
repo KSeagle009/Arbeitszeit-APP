@@ -36,3 +36,14 @@ label{font-size:13px;color:var(--sub);display:block;margin:12px 0 6px}input,sele
 .reset-dialog p{font-size:14px;line-height:1.6}
 .reset-dialog .row{margin-top:20px}
 .reset-dialog .row button{flex:1;min-width:120px}
+
+/* Version of the loaded app, independent of saved user data. */
+.app-version{float:right;display:inline-block;padding:4px 9px;border:1px solid var(--line);border-radius:20px;background:var(--soft);color:var(--accent);font-size:12px;font-weight:650;line-height:1.4;font-variant-numeric:tabular-nums}
+:root{--holiday-bg:#fff0dc;--holiday-ink:#7c4700;--holiday-edge:#d29026}
+body.dark{--holiday-bg:#41321b;--holiday-ink:#ffda94;--holiday-edge:#bd9144}
+.day.holiday{background:var(--holiday-bg);color:var(--holiday-ink);border-color:var(--holiday-edge)}
+.calendar-holidays{margin-top:15px;padding-top:13px;border-top:1px solid var(--line);font-size:12px;line-height:1.6;color:var(--sub)}
+.calendar-holidays>strong{color:var(--ink)}
+.calendar-holidays ul{list-style:none;padding:0;margin:7px 0 0}
+.calendar-holidays li{padding:4px 0}
+.calendar-holidays li strong{color:var(--ink)}
