@@ -91,3 +91,29 @@ body.dark{--holiday-bg:#41321b;--holiday-ink:#ffda94;--holiday-edge:#bd9144}
  #printReport .report-error-note{border:1px solid #a94921;padding:8px;color:#7d3011}
  #printReport .report-footer{margin-top:14px;font-size:7pt;line-height:1.5;color:#43585d}
 }
+
+/* v0.6: central entry action, premium disclosure and independent payout modes. */
+.tabs .entry-primary{transform:translateY(-8px);border:1px solid var(--accent);background:var(--soft);color:var(--accent);border-radius:16px;font-weight:700;box-shadow:0 3px 12px rgba(0,0,0,.12)}
+.tabs .entry-primary.active{background:var(--accent);color:var(--button-ink)}
+.tabs .entry-primary.active:before{display:none}
+.payout-options fieldset{border:1px solid var(--line);border-radius:10px;margin:0;min-width:0;padding:8px 10px}
+.payout-options legend{font-size:13px;padding:0 4px}
+.payout-options label{display:flex;gap:10px;align-items:center;min-height:44px;margin:0;color:var(--ink);font-size:15px}
+.payout-options input{width:22px;height:22px;accent-color:var(--accent)}
+.premium-rules summary{cursor:pointer;min-height:44px;display:list-item;padding:10px 0;font-weight:600}
+.premium-rules>div{padding-top:8px}
+.year-stats{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+@media screen{
+ body.report-preview{padding:0;background:white;color:#172b30;color-scheme:light}
+ body.report-preview>:not(#printReport):not(#printToolbar){display:none!important}
+ body.report-preview #printToolbar{display:block;position:sticky;top:0;z-index:10;padding:12px;background:var(--card);color:var(--ink);border-bottom:1px solid var(--line)}
+ body.report-preview #printReport{display:block;overflow-x:auto;padding:16px;font:13px Arial,sans-serif;background:white;color:#172b30}
+ #printReport .report-table{border-collapse:collapse;width:100%;min-width:1050px;font-size:12px}
+ #printReport .report-table th,#printReport .report-table td{padding:8px;border-bottom:1px solid #d1dddb;vertical-align:top;overflow-wrap:anywhere}
+ #printReport .report-table th{text-align:left;background:#e6f2f0}
+ #printReport .report-table small{font-size:11px}
+ #printReport .report-note{white-space:pre-wrap}
+ #printReport .report-heading{display:flex;justify-content:space-between;gap:15px;padding:0;border-bottom:2px solid #007e78;max-width:none;color:inherit;background:white}
+ #printReport .report-totals{line-height:1.6}
+ #printReport .report-footer{font-size:11px;margin-top:16px}
+}
