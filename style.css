@@ -164,3 +164,13 @@ details.settings-panel>summary:focus-visible{outline:2px solid var(--accent);out
 .split{grid-template-columns:repeat(2,minmax(0,1fr))}
 .split>*{min-width:0}
 @media(max-width:380px){details.settings-panel>summary{padding:14px}details.settings-panel>.settings-panel-content{padding:0 14px 14px}}
+
+/* v0.8 offline status; no change to existing cards or navigation. */
+.offline-summary{display:inline-block;margin-top:10px;padding:5px 9px;border:1px solid var(--line);border-radius:20px;color:var(--sub);background:var(--card);font-size:11px;line-height:1.4}
+.pwa-update{margin:0 0 14px;border:1px solid var(--accent)}
+.pwa-update p{margin:0 0 10px}
+.pwa-instructions{padding-left:22px;font-size:13px;line-height:1.6}
+.pwa-instructions li+li{margin-top:8px}
+#pwaStatus{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+#checkPwaUpdates{max-width:100%;white-space:normal}
+[hidden]{display:none!important}

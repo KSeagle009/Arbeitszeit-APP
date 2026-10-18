@@ -1,5 +1,5 @@
 
-(()=>{'use strict';const APP_VERSION='0.7';const $=id=>document.getElementById(id),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay());let today=new Date(),todayStr=dateISO(today);const defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},weekWorkplaces:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data;try{data={...defaultData,...JSON.parse(localStorage.getItem('arbeitszeit-v3')||'{}')}}catch{data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];data.weekWorkplaces=data.weekWorkplaces||{};if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false,entryWorkplaceTouched=false;function save(){realizePastVacation();localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));render()}
+(()=>{'use strict';const APP_VERSION='0.8';const $=id=>document.getElementById(id),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay());let today=new Date(),todayStr=dateISO(today);const defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},weekWorkplaces:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data;try{data={...defaultData,...JSON.parse(localStorage.getItem('arbeitszeit-v3')||'{}')}}catch{data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];data.weekWorkplaces=data.weekWorkplaces||{};if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false,entryWorkplaceTouched=false;function save(){realizePastVacation();localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));render()}
 // Vacation calendar: statutory Austrian holidays plus the user's free days.
 // The extra free days do not change the separate overtime premium rules.
 function vacationHolidayName(date) {
@@ -950,4 +950,91 @@ function initDateRefresh() {
  setInterval(()=>{if(!document.hidden)refreshAppDate();},60000);
 }
 
-function fillSettings(){for(let k of ['initialVacation','initialTime','defaultBreak','annualVacation','startDate','theme'])$(k).value=data[k];$('shiftDate').dispatchEvent(new Event('change'))}init();initDateRefresh()})();
+// Offline shell and deliberate updates. User data remains in its existing store.
+const pwaDraftKey='arbeitszeit-update-entwurf:'+new URL('.',location.href).pathname;
+let pwaRegistration=null,pwaUpdating=false,pwaLastCheck=0,pwaReady=false;
+function pwaMessage(text){$('pwaStatus').textContent=text;}
+function pwaDetailKey(el){return el.id?'id:'+el.id:'summary:'+(el.querySelector(':scope>summary')?.textContent.trim()||'');}
+function capturePwaDraft(){
+ const fields=[...document.querySelectorAll('input[id],select[id],textarea[id]')].filter(el=>el.type!=='file').map(el=>({id:el.id,value:el.value,checked:el.checked}));
+ const draft={format:1,created:Date.now(),fields,weekdays:[...document.querySelectorAll('[data-plan-weekday]')].map(el=>({value:el.value,checked:el.checked})),editing,entryTimesTouched,entryWorkplaceTouched,selected,calendarMulti,calendarSelection:[...calendarSelection],month:dateISO(month),yearMeasure,yearMonth,tab:document.querySelector('.tabs .active')?.dataset.tab||'overview',scroll:scrollY,openDetails:[...document.querySelectorAll('details')].filter(el=>el.open).map(pwaDetailKey)};
+ sessionStorage.setItem(pwaDraftKey,JSON.stringify(draft));
+}
+function restorePwaDraft(){
+ let raw;try{raw=sessionStorage.getItem(pwaDraftKey);if(!raw)return;const draft=JSON.parse(raw);if(draft.format!==1||!Array.isArray(draft.fields)||Date.now()-draft.created>86400000){sessionStorage.removeItem(pwaDraftKey);return;}
+  const shiftDate=draft.fields.find(f=>f.id==='shiftDate')?.value;
+  if(backupDate(shiftDate)){$('shiftDate').value=shiftDate;loadShiftWeek();}
+  editing=draft.editing&&data.entries[draft.editing]?draft.editing:null;
+  entryTimesTouched=!!draft.entryTimesTouched;entryWorkplaceTouched=!!draft.entryWorkplaceTouched;
+  selected=draft.selected||null;calendarMulti=!!draft.calendarMulti;calendarSelection=new Set((draft.calendarSelection||[]).filter(backupDate));
+  if(backupDate(draft.month))month=dateObj(draft.month);
+  if(['worked','overtime'].includes(draft.yearMeasure))yearMeasure=draft.yearMeasure;
+  if(Number.isInteger(draft.yearMonth)&&draft.yearMonth>=0&&draft.yearMonth<12)yearMonth=draft.yearMonth;
+  switchTab(['overview','entry','vacation','year','settings'].includes(draft.tab)?draft.tab:'overview');
+  const workplace=draft.fields.find(f=>f.id==='entryWorkplace')?.value;
+  if(typeof workplace==='string')renderEntryWorkplaces(workplace);
+  for(const field of draft.fields){const el=$(field.id);if(!el||el.type==='file'||typeof field.value!=='string')continue;if(el.tagName==='SELECT'&&!Array.from(el.options).some(o=>o.value===field.value))continue;el.value=field.value;if(el.type==='checkbox'||el.type==='radio')el.checked=!!field.checked;}
+  for(const item of draft.weekdays||[]){const el=[...document.querySelectorAll('[data-plan-weekday]')].find(el=>el.value===item.value);if(el)el.checked=!!item.checked;}
+  toggleWork();renderEntryShiftHint();renderEntryCalculation();renderCalendar();renderYear();updateReportPeriod();
+  document.querySelectorAll('details').forEach(el=>{el.open=(draft.openDetails||[]).includes(pwaDetailKey(el));});
+  sessionStorage.removeItem(pwaDraftKey);
+  requestAnimationFrame(()=>window.scrollTo(0,Number(draft.scroll)||0));
+ }catch{pwaMessage('Dein Entwurf konnte nicht vollständig wiederhergestellt werden. Die gespeicherten Tage bleiben erhalten.');}
+}
+function showPwaUpdate(){
+ $('pwaUpdate').hidden=false;$('applyPwaUpdate').disabled=false;
+ $('pwaUpdateText').textContent='Eine neue App-Version ist bereit. Deine offenen Eingaben werden beim Aktualisieren übernommen.';
+}
+function askWorker(worker,message){return new Promise((resolve,reject)=>{
+ if(!worker){reject(Error('Kein Offline-Stand'));return;}
+ const channel=new MessageChannel(),timer=setTimeout(()=>{channel.port1.close();reject(Error('Keine Antwort'));},4000);
+ channel.port1.onmessage=event=>{clearTimeout(timer);channel.port1.close();resolve(event.data);};worker.postMessage(message,[channel.port2]);
+});}
+async function checkPwaReady(){
+ try{
+  const worker=navigator.serviceWorker.controller||pwaRegistration?.active;
+  const result=await askWorker(worker,{type:'OFFLINE_STATUS'});
+  pwaReady=!!result.ready&&result.version===APP_VERSION;
+  $('offlineSummary').textContent=pwaReady?(navigator.onLine?'Offline bereit':'Offline-Modus'):'Offline noch nicht bereit';
+  pwaMessage(pwaReady?'Diese Version ist für Offline-Nutzung bereit. Nach dem ersten vollständigen Laden kannst du die App auch ohne Internet erneut öffnen.':result.ready?'Eine andere App-Version ist bereit. Bitte über den Aktualisieren-Button übernehmen.':'Die Offline-Dateien sind noch nicht vollständig verfügbar. Bitte mit Internet erneut prüfen.');
+  if(result.ready&&result.version!==APP_VERSION)showPwaUpdate();
+  else if(!pwaRegistration?.waiting&&!pwaUpdating)$('pwaUpdate').hidden=true;
+ }catch{pwaReady=false;$('offlineSummary').textContent='Offline noch nicht bereit';pwaMessage(navigator.onLine?'Die Offline-Einrichtung wird vorbereitet. Bitte mit Internet erneut prüfen.':'Diese App-Version ist noch nicht vollständig offline eingerichtet. Bitte mit Internet erneut öffnen.');}
+ if(pwaRegistration?.waiting&&pwaRegistration.active)showPwaUpdate();
+}
+async function checkPwaUpdates(){
+ if(!pwaRegistration)return;
+ $('checkPwaUpdates').disabled=true;
+ try{if(navigator.onLine){await pwaRegistration.update();pwaLastCheck=Date.now();}await checkPwaReady();}
+ catch{pwaMessage(pwaReady?'Die vorhandene Version bleibt offline verfügbar. Die Prüfung auf eine neue Version war nicht möglich.':'Die Einrichtung konnte nicht abgeschlossen werden. Bitte Verbindung prüfen und erneut versuchen.');}
+ finally{$('checkPwaUpdates').disabled=false;}
+}
+function applyPwaUpdate(){
+ if($('importData').disabled){$('pwaUpdateText').textContent='Bitte zuerst die laufende Wiederherstellung abschließen.';return;}
+ try{capturePwaDraft();}catch{$('pwaUpdateText').textContent='Offene Eingaben konnten nicht zwischengespeichert werden. Bitte zuerst speichern; die App wurde nicht neu geladen.';return;}
+ pwaUpdating=true;$('applyPwaUpdate').disabled=true;$('pwaUpdateText').textContent='Aktualisierung wird übernommen …';
+ if(pwaRegistration?.waiting)pwaRegistration.waiting.postMessage({type:'ACTIVATE_UPDATE'});
+ else window.location.reload();
+}
+function initPwa(){
+ restorePwaDraft();
+ $('applyPwaUpdate').onclick=applyPwaUpdate;$('checkPwaUpdates').onclick=checkPwaUpdates;
+ const standalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+ $('pwaLaunchMode').textContent=standalone?'Vom Home-Bildschirm gestartet':'Im Browser geöffnet';
+ if(!('serviceWorker' in navigator)||!window.isSecureContext||location.protocol==='file:'){
+  $('offlineSummary').textContent='Offline-Einrichtung noch nicht aktiv';pwaMessage('Die Offline-Einrichtung ist über die veröffentlichte HTTPS-Adresse verfügbar. Die lokale Datei bleibt wie bisher nutzbar.');$('checkPwaUpdates').disabled=true;return;
+ }
+ $('offlineSummary').textContent='Offline-Einrichtung läuft';
+ navigator.serviceWorker.addEventListener('controllerchange',()=>{if(pwaUpdating){window.location.reload();return;}checkPwaReady();});
+ navigator.serviceWorker.register('./sw.js',{scope:'./',updateViaCache:'none'}).then(registration=>{
+  pwaRegistration=registration;
+  if(registration.waiting&&registration.active)showPwaUpdate();
+  const watch=()=>{const worker=registration.installing;if(!worker)return;worker.addEventListener('statechange',()=>{if(worker.state==='installed'){if(registration.waiting&&registration.active)showPwaUpdate();checkPwaReady();}if(worker.state==='activated')checkPwaReady();if(worker.state==='redundant')pwaMessage(pwaReady?'Die neue Version konnte noch nicht vollständig geladen werden. Die bisherige Version bleibt verfügbar.':'Die Offline-Dateien konnten noch nicht vollständig geladen werden. Bitte mit Internet erneut prüfen.');});};
+  registration.addEventListener('updatefound',watch);watch();checkPwaReady();
+ }).catch(()=>{$('offlineSummary').textContent='Offline noch nicht bereit';pwaMessage('Die Offline-Einrichtung konnte nicht gestartet werden. Bitte prüfen, ob alle App-Dateien veröffentlicht sind, und neu laden.');});
+ window.addEventListener('offline',checkPwaReady);
+ window.addEventListener('online',checkPwaUpdates);
+ window.addEventListener('focus',()=>{checkPwaReady();if(navigator.onLine&&Date.now()-pwaLastCheck>60000)checkPwaUpdates();});
+}
+
+function fillSettings(){for(let k of ['initialVacation','initialTime','defaultBreak','annualVacation','startDate','theme'])$(k).value=data[k];$('shiftDate').dispatchEvent(new Event('change'))}init();initDateRefresh();initPwa()})();
