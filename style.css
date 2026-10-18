@@ -26,9 +26,9 @@ label{font-size:13px;color:var(--sub);display:block;margin:12px 0 6px}input,sele
 
 /* Jahresübersicht – Monatsvergleich */
 .year-picker{display:flex;gap:12px;align-items:center;margin:14px 4px}.year-picker label{margin:0;flex:1}.year-picker select{width:130px}
-.year-hero{background:var(--balance-bg);padding:21px}.year-hero .big{font-size:38px;margin:12px 0 8px}.year-hero .metric-title{font-size:14px}
+.year-hero{background:var(--pay-bg);border-left:4px solid var(--pay-edge);padding:21px}.year-hero .big{font-size:38px;margin:12px 0 8px}.year-hero .metric-title{font-size:14px}
 .year-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:12px 3px 18px}.year-stat strong{display:block;font-size:20px;font-weight:750;font-variant-numeric:tabular-nums}.year-stat span{display:block;color:var(--sub);font-size:11px;line-height:1.4}
-.year-switch{display:flex;gap:4px;background:var(--field-bg);border-radius:11px;padding:4px;margin:0 0 15px}.year-switch button{flex:1;min-width:0;padding:10px 4px;background:none;color:var(--sub);font-size:13px}.year-switch button[aria-pressed=true]{background:var(--soft);color:var(--accent)}
+.year-switch{display:flex;gap:4px;background:var(--field-bg);border-radius:11px;padding:4px;margin:0 0 15px}.year-switch button{flex:1;min-width:0;padding:10px 4px;background:none;color:var(--sub);font-size:13px}.year-switch button[aria-pressed=true]{background:var(--accent);color:var(--button-ink)}
 .year-bar-row{display:grid;grid-template-columns:34px minmax(0,1fr) 90px;gap:10px;align-items:center;width:100%;min-height:44px;text-align:left;padding:9px 0;background:none;color:var(--ink);border-radius:6px;font-size:13px;font-weight:500}.year-bar-row[aria-pressed=true]{color:var(--accent)}.year-bar-row[aria-pressed=true] .year-bar-month{font-weight:750}.year-bar-value{text-align:right;font-variant-numeric:tabular-nums;font-size:12px;overflow-wrap:anywhere}
 .year-bar-track{height:15px;background:var(--line);border-radius:4px;overflow:hidden}.year-bar-fill{display:block;height:100%;background:var(--accent);border-radius:4px;transition:width .2s ease}.year-bar-row.no-entries .year-bar-month{color:var(--sub)}
 .year-axis{display:flex;justify-content:space-between;margin:7px 100px 0 44px;color:var(--sub);font-size:11px}.year-selection{border-top:1px solid var(--line);padding-top:14px;margin-top:15px;font-size:13px;line-height:1.6}.year-selection strong{display:block;margin-bottom:5px;font-size:16px}.year-selection span{display:block;color:var(--sub)}
@@ -180,3 +180,6 @@ details.settings-panel>summary:focus-visible{outline:2px solid var(--accent);out
 
 /* v0.9.1: one backup action, folder note alongside last creation time. */
 #backupCard .backup-create{display:block;width:100%;margin:12px 0}.backup-folder-display{overflow-wrap:anywhere}.backup-folder-editor{margin:14px 0}.backup-folder-editor>summary{cursor:pointer;min-height:44px;display:list-item;padding:12px 0;font-size:.9rem;font-weight:600}.backup-folder-editor[open]>summary{margin-bottom:4px}
+
+/* v1.0: creator credit belongs only to Settings, above the bottom navigation. */
+.app-credit{margin:26px 4px 10px;padding:18px 10px 0;border-top:1px solid var(--line);text-align:center;color:var(--sub);font-size:12px;line-height:1.6;overflow-wrap:anywhere}.app-credit p{margin:0 0 5px}.app-credit small{font-size:11px}@media print{.app-credit{display:none!important}}
