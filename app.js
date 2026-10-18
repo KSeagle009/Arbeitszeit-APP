@@ -1,5 +1,5 @@
 
-(()=>{'use strict';const APP_VERSION='0.9';const $=id=>document.getElementById(id),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay());let today=new Date(),todayStr=dateISO(today);const defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},weekWorkplaces:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data,primaryWasPresent=false,primaryLoadFailed=false;try{const stored=localStorage.getItem('arbeitszeit-v3');primaryWasPresent=stored!==null;data={...defaultData,...JSON.parse(stored||'{}')}}catch{primaryLoadFailed=true;data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];data.weekWorkplaces=data.weekWorkplaces||{};if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';if(!primaryLoadFailed)persistAppData(JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false,entryWorkplaceTouched=false;function save(){realizePastVacation();persistAppData(JSON.stringify(data));render()}
+(()=>{'use strict';const APP_VERSION='0.9.1';const $=id=>document.getElementById(id),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay());let today=new Date(),todayStr=dateISO(today);const defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},weekWorkplaces:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data,primaryWasPresent=false,primaryLoadFailed=false;try{const stored=localStorage.getItem('arbeitszeit-v3');primaryWasPresent=stored!==null;data={...defaultData,...JSON.parse(stored||'{}')}}catch{primaryLoadFailed=true;data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];data.weekWorkplaces=data.weekWorkplaces||{};if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';if(!primaryLoadFailed)persistAppData(JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false,entryWorkplaceTouched=false;function save(){realizePastVacation();persistAppData(JSON.stringify(data));render()}
 // Vacation calendar: statutory Austrian holidays plus the user's free days.
 // The extra free days do not change the separate overtime premium rules.
 function vacationHolidayName(date) {
@@ -526,10 +526,15 @@ function validateBackup(input) {
 }
 function renderLastBackup() {
  renderBackupReminder();
+ $('lastBackupFolderHint').textContent = 'Ordnerhinweis: ' + (data.backupFolderHint?.trim() || 'Noch nicht hinterlegt');
  const value=data.lastBackupCreatedAt;
  $('lastBackupCreatedAt').textContent=typeof value==='string'&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleString('de-AT',{dateStyle:'medium',timeStyle:'short'}):'Noch kein Zeitpunkt gespeichert';
 }
-function exportBackup() { downloadBackup(); }
+function exportBackup() {
+ if (recoveryBusy || backupSharing) return;
+ if (typeof File !== 'function') { downloadBackup(); return; }
+ shareBackupFile();
+}
 async function importBackup(event) {
  const input = event.target, file = input.files[0];
  if (!file) return;
@@ -1137,7 +1142,7 @@ function renderBackupReminder() {
 }
 function setBackupBusy(busy) {
  recoveryBusy = busy;
- for (const id of ['exportData','shareBackup','importData','saveBackupFolder','resetData','checkRecoveryStorage']) $(id).disabled = busy;
+ for (const id of ['exportData','importData','saveBackupFolder','resetData','checkRecoveryStorage']) $(id).disabled = busy;
  renderRecovery();
 }
 function backupFolderMessage() {
@@ -1190,22 +1195,26 @@ function shareBackupFile() {
  try {
   const payload = createBackupPayload(), file = new File([backupBlob(payload)], backupFileName, {type:'application/json'});
   if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function' || !navigator.canShare({files:[file]})) {
-   backupMessage('Das Teilen dieser Datei wird hier nicht unterstützt. Bitte „Sicherungsdatei herunterladen“ verwenden.' + backupFolderMessage(), 'warning'); return;
+   downloadBackup(); return;
   }
   // Call directly during the tap, before awaiting any asynchronous operation.
   const result = navigator.share({files:[file], title:'Arbeitszeit-Sicherung'});
   backupSharing = true; setBackupBusy(true);
   Promise.resolve(result).then(() => finishExternalBackup(payload, 'Sicherungsdatei an die Teilenfunktion übergeben. Unter „In Dateien sichern“ den gewünschten Ordner wählen.')).catch(error => {
-   backupMessage(error.name === 'AbortError' ? 'Teilen abgebrochen. Der Sicherungszeitpunkt bleibt unverändert.' : 'Teilen nicht möglich. Bitte „Sicherungsdatei herunterladen“ verwenden.', error.name === 'AbortError' ? '' : 'warning');
+   if (error.name === 'AbortError') backupMessage('Teilen abgebrochen. Der Sicherungszeitpunkt bleibt unverändert.');
+   else downloadBackup();
   }).finally(() => { backupSharing = false; setBackupBusy(false); });
- } catch (error) { backupMessage('Sicherung konnte nicht geteilt werden. ' + error.message, 'warning'); }
+ } catch (error) {
+  if (error.name === 'AbortError') backupMessage('Teilen abgebrochen. Der Sicherungszeitpunkt bleibt unverändert.');
+  else downloadBackup();
+ }
 }
 function saveBackupFolder() {
  const value = $('backupFolderHint').value.trim();
  if (value.length > 240) { backupMessage('Der Ordnerhinweis darf höchstens 240 Zeichen enthalten.', 'warning'); return; }
  const previous = data;
  try {
-  data = {...data, backupFolderHint:value}; persistAppData(JSON.stringify(data));
+  data = {...data, backupFolderHint:value}; persistAppData(JSON.stringify(data)); renderLastBackup();
   backupMessage(value ? 'Ordnerhinweis gespeichert. Beim Sichern den Ordner selbst unter „Dateien“ auswählen.' : 'Ordnerhinweis entfernt.', 'success');
  } catch { data = previous; backupMessage('Der Ordnerhinweis konnte nicht gespeichert werden.', 'warning'); }
 }
@@ -1248,7 +1257,6 @@ async function checkRecoveryStorage() {
 function initRecovery() {
  recoveryInitialized = true;
  recoveryCaptureAllowed = primaryWasPresent && !primaryLoadFailed;
- $('shareBackup').onclick = shareBackupFile;
  $('saveBackupFolder').onclick = saveBackupFolder;
  $('restorecurrent').onclick = () => restoreRecoveryPoint('current');
  $('restoreprevious').onclick = () => restoreRecoveryPoint('previous');

@@ -177,3 +177,6 @@ details.settings-panel>summary:focus-visible{outline:2px solid var(--accent);out
 
 /* v0.9: backup actions remain readable on narrow iPhones. */
 #backupCard button{white-space:normal;overflow-wrap:anywhere;max-width:100%}#backupCard .backup-download,#backupCard #shareBackup{display:block;margin-top:12px;width:100%}#backupFolderHint{width:100%;min-width:0}#recoveryStatus{font-size:.9rem;overflow-wrap:anywhere}.backup-reminder p{margin-top:0}.backup-reminder button{max-width:100%;white-space:normal}
+
+/* v0.9.1: one backup action, folder note alongside last creation time. */
+#backupCard .backup-create{display:block;width:100%;margin:12px 0}.backup-folder-display{overflow-wrap:anywhere}.backup-folder-editor{margin:14px 0}.backup-folder-editor>summary{cursor:pointer;min-height:44px;display:list-item;padding:12px 0;font-size:.9rem;font-weight:600}.backup-folder-editor[open]>summary{margin-bottom:4px}
