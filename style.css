@@ -174,3 +174,6 @@ details.settings-panel>summary:focus-visible{outline:2px solid var(--accent);out
 #pwaStatus{font-size:13px;line-height:1.6;overflow-wrap:anywhere}
 #checkPwaUpdates{max-width:100%;white-space:normal}
 [hidden]{display:none!important}
+
+/* v0.9: backup actions remain readable on narrow iPhones. */
+#backupCard button{white-space:normal;overflow-wrap:anywhere;max-width:100%}#backupCard .backup-download,#backupCard #shareBackup{display:block;margin-top:12px;width:100%}#backupFolderHint{width:100%;min-width:0}#recoveryStatus{font-size:.9rem;overflow-wrap:anywhere}.backup-reminder p{margin-top:0}.backup-reminder button{max-width:100%;white-space:normal}

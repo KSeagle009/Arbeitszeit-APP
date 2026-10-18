@@ -1,5 +1,5 @@
 
-(()=>{'use strict';const APP_VERSION='0.8';const $=id=>document.getElementById(id),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay());let today=new Date(),todayStr=dateISO(today);const defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},weekWorkplaces:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data;try{data={...defaultData,...JSON.parse(localStorage.getItem('arbeitszeit-v3')||'{}')}}catch{data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];data.weekWorkplaces=data.weekWorkplaces||{};if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false,entryWorkplaceTouched=false;function save(){realizePastVacation();localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));render()}
+(()=>{'use strict';const APP_VERSION='0.9';const $=id=>document.getElementById(id),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay());let today=new Date(),todayStr=dateISO(today);const defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},weekWorkplaces:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data,primaryWasPresent=false,primaryLoadFailed=false;try{const stored=localStorage.getItem('arbeitszeit-v3');primaryWasPresent=stored!==null;data={...defaultData,...JSON.parse(stored||'{}')}}catch{primaryLoadFailed=true;data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];data.weekWorkplaces=data.weekWorkplaces||{};if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';if(!primaryLoadFailed)persistAppData(JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false,entryWorkplaceTouched=false;function save(){realizePastVacation();persistAppData(JSON.stringify(data));render()}
 // Vacation calendar: statutory Austrian holidays plus the user's free days.
 // The extra free days do not change the separate overtime premium rules.
 function vacationHolidayName(date) {
@@ -118,7 +118,7 @@ function changeCalendarPlans(action) {
   try {
    if(localStorage.getItem('arbeitszeit-v3')!==stored) {
     if(stored===null) localStorage.removeItem('arbeitszeit-v3');
-    else if(stored!==undefined) localStorage.setItem('arbeitszeit-v3',stored);
+    else if(stored!==undefined) persistAppData(stored);
    }
   } catch { /* Keep the original in-memory data if browser storage is blocked. */ }
   render();
@@ -408,7 +408,7 @@ function deleteEntry(date) {
   delete entries[date];
   // Remove any matching vacation plan too, so a booked day cannot reappear.
   data = {...data, entries, planned:data.planned.filter(d => d !== date)};
-  localStorage.setItem('arbeitszeit-v3', JSON.stringify(data));
+  persistAppData(JSON.stringify(data));
  } catch {
   data = previous;
   alert('Der Tag konnte nicht gelöscht werden. Deine bisherigen Daten bleiben erhalten.');
@@ -422,7 +422,7 @@ function deleteEntry(date) {
  } catch {
   data = previous;
   if (previousStored === null) localStorage.removeItem('arbeitszeit-v3');
-  else localStorage.setItem('arbeitszeit-v3', previousStored);
+  else persistAppData(previousStored);
   render();
   alert('Der Tag konnte nicht gelöscht werden. Deine bisherigen Daten bleiben erhalten.');
   return;
@@ -432,7 +432,7 @@ function deleteEntry(date) {
  status.hidden = false;
 }
 
-function resetEntry(){refreshAppDate(false);editing=null;$('entryForm').reset();loadPayout();entryWorkplaceTouched=false;$('entryDate').value=todayStr;$('entryBreak').value=data.defaultBreak;$('entryInfo').hidden=true;toggleWork();applyEntryShift();applyEntryWorkplace();renderEntryCalculation()}function toggleWork(){const work=$('entryType').value==='Arbeit';$('workFields').hidden=!work;$('workFields').querySelectorAll('input,select').forEach(field=>field.disabled=!work);renderEntryShiftHint();renderEntryCalculation()}function editEntry(d){let e=data.entries[d];if(!e)return;editing=d;entryWorkplaceTouched=true;$('entryDate').value=d;$('entryType').value=e.type;$('entryStart').value=e.start||'06:00';$('entryEnd').value=e.end||'14:00';$('entryBreak').value=e.break??data.defaultBreak;loadPayout(e);$('entry50').value=e.override50??'';$('entry100').value=e.override100??'';$('entryNote').value=e.note||'';toggleWork();switchTab('entry');renderEntryWorkplaces(e.workplace||'');window.scrollTo(0,0)}function init(){$('appVersion').textContent='v'+APP_VERSION;initReports();$('resetData').onclick=showResetDataDialog;$('cancelResetData').onclick=()=>$('resetDataDialog').close();$('confirmResetData').onclick=resetAllAppData;if(realizePastVacation())localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$('entryType').onchange=toggleWork;for(const category of [50,100])for(const mode of ['Pay','Split'])$('entry'+mode+category).onchange=()=>{const field=$('entry'+mode+category);if(field.checked)$('entry'+(mode==='Pay'?'Split':'Pay')+category).checked=false;renderEntryCalculation();};$('entryReset').onclick=resetEntry;$('entryForm').onsubmit=e=>{e.preventDefault();refreshAppDate(false);let d=$('entryDate').value,type=$('entryType').value;if(!d)return;let item=type==='Arbeit'?{type,start:$('entryStart').value,end:$('entryEnd').value,break:Number($('entryBreak').value),payout50:formPayout(50),payout100:formPayout(100),override50:$('entry50').value===''?null:Number($('entry50').value),override100:$('entry100').value===''?null:Number($('entry100').value),note:$('entryNote').value,workplace:$('entryWorkplace').value}:{type,note:$('entryNote').value};if(type==='Arbeit'){let entries={...data.entries};if(editing&&editing!==d)delete entries[editing];entries[d]=item;let result=TimeEngine.calculate(entries,shiftForDate)[d];if(result.error){alert(result.error);return}if([item.override50,item.override100].some(v=>v!==null&&(!Number.isFinite(v)||v<0))){alert('Bitte gültige Überstundenwerte eingeben.');return}} if(editing&&editing!==d)delete data.entries[editing];data.entries[d]=item;if(type==='TU')data.planned=data.planned.filter(x=>x!==d);save();$('entryInfo').hidden=false;$('entryInfo').textContent='Tag gespeichert. Du kannst ihn unten erneut bearbeiten.';editing=d;renderEntryCalculation()};$('recent').onclick=entryListAction;$('entryList').onclick=entryListAction;$('monthPrev').onclick=()=>{month.setMonth(month.getMonth()-1);selected=null;renderCalendar()};$('monthNext').onclick=()=>{month.setMonth(month.getMonth()+1);selected=null;renderCalendar()};initCalendarSelection();
+function resetEntry(){refreshAppDate(false);editing=null;$('entryForm').reset();loadPayout();entryWorkplaceTouched=false;$('entryDate').value=todayStr;$('entryBreak').value=data.defaultBreak;$('entryInfo').hidden=true;toggleWork();applyEntryShift();applyEntryWorkplace();renderEntryCalculation()}function toggleWork(){const work=$('entryType').value==='Arbeit';$('workFields').hidden=!work;$('workFields').querySelectorAll('input,select').forEach(field=>field.disabled=!work);renderEntryShiftHint();renderEntryCalculation()}function editEntry(d){let e=data.entries[d];if(!e)return;editing=d;entryWorkplaceTouched=true;$('entryDate').value=d;$('entryType').value=e.type;$('entryStart').value=e.start||'06:00';$('entryEnd').value=e.end||'14:00';$('entryBreak').value=e.break??data.defaultBreak;loadPayout(e);$('entry50').value=e.override50??'';$('entry100').value=e.override100??'';$('entryNote').value=e.note||'';toggleWork();switchTab('entry');renderEntryWorkplaces(e.workplace||'');window.scrollTo(0,0)}function init(){$('appVersion').textContent='v'+APP_VERSION;initReports();$('resetData').onclick=showResetDataDialog;$('cancelResetData').onclick=()=>$('resetDataDialog').close();$('confirmResetData').onclick=resetAllAppData;if(realizePastVacation())persistAppData(JSON.stringify(data));document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$('entryType').onchange=toggleWork;for(const category of [50,100])for(const mode of ['Pay','Split'])$('entry'+mode+category).onchange=()=>{const field=$('entry'+mode+category);if(field.checked)$('entry'+(mode==='Pay'?'Split':'Pay')+category).checked=false;renderEntryCalculation();};$('entryReset').onclick=resetEntry;$('entryForm').onsubmit=e=>{e.preventDefault();refreshAppDate(false);let d=$('entryDate').value,type=$('entryType').value;if(!d)return;let item=type==='Arbeit'?{type,start:$('entryStart').value,end:$('entryEnd').value,break:Number($('entryBreak').value),payout50:formPayout(50),payout100:formPayout(100),override50:$('entry50').value===''?null:Number($('entry50').value),override100:$('entry100').value===''?null:Number($('entry100').value),note:$('entryNote').value,workplace:$('entryWorkplace').value}:{type,note:$('entryNote').value};if(type==='Arbeit'){let entries={...data.entries};if(editing&&editing!==d)delete entries[editing];entries[d]=item;let result=TimeEngine.calculate(entries,shiftForDate)[d];if(result.error){alert(result.error);return}if([item.override50,item.override100].some(v=>v!==null&&(!Number.isFinite(v)||v<0))){alert('Bitte gültige Überstundenwerte eingeben.');return}} if(editing&&editing!==d)delete data.entries[editing];data.entries[d]=item;if(type==='TU')data.planned=data.planned.filter(x=>x!==d);save();$('entryInfo').hidden=false;$('entryInfo').textContent='Tag gespeichert. Du kannst ihn unten erneut bearbeiten.';editing=d;renderEntryCalculation()};$('recent').onclick=entryListAction;$('entryList').onclick=entryListAction;$('monthPrev').onclick=()=>{month.setMonth(month.getMonth()-1);selected=null;renderCalendar()};$('monthNext').onclick=()=>{month.setMonth(month.getMonth()+1);selected=null;renderCalendar()};initCalendarSelection();
 for(let y=today.getFullYear()-3;y<=today.getFullYear()+5;y++)$('yearSelect').add(new Option(String(y),String(y)));$('yearSelect').value=String(today.getFullYear());$('yearSelect').onchange=chooseYearMonth;
 document.querySelectorAll('[data-year-measure]').forEach(b=>b.onclick=()=>{yearMeasure=b.dataset.yearMeasure;renderYear()});
 $('yearBars').onclick=e=>{let b=e.target.closest('[data-year-month]');if(b){yearMonth=Number(b.dataset.yearMonth);renderYear()}};
@@ -482,6 +482,7 @@ function validateBackup(input) {
  const restored = {...JSON.parse(JSON.stringify(defaultData)), ...raw};
  // Keep the selected theme when loading a backup from before the design migration.
  restored.designVersion = 'teal-design-2';
+ if('backupFolderHint' in restored)check(typeof restored.backupFolderHint==='string'&&restored.backupFolderHint.length<=240, 'Der Ordnerhinweis in der Sicherung ist ungültig.');
  if('lastBackupCreatedAt' in restored)check(typeof restored.lastBackupCreatedAt==='string'&&/^\d{4}-\d{2}-\d{2}T/.test(restored.lastBackupCreatedAt)&&Number.isFinite(Date.parse(restored.lastBackupCreatedAt)), 'Der Sicherungszeitpunkt in der Datei ist ungültig.');
  check(backupDate(restored.startDate), 'Das Startdatum in der Sicherung ist ungültig.');
  for (const key of ['initialVacation', 'initialTime', 'defaultBreak', 'annualVacation']) {
@@ -524,44 +525,17 @@ function validateBackup(input) {
  return {data: restored, createdAt: raw === input ? null : input.createdAt};
 }
 function renderLastBackup() {
+ renderBackupReminder();
  const value=data.lastBackupCreatedAt;
  $('lastBackupCreatedAt').textContent=typeof value==='string'&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleString('de-AT',{dateStyle:'medium',timeStyle:'short'}):'Noch kein Zeitpunkt gespeichert';
 }
-function exportBackup() {
- let url;
- try {
-  const createdAt = new Date();
-  const payload = {format: backupFormat, version: backupVersion, createdAt: createdAt.toISOString(), data:{...data,lastBackupCreatedAt:createdAt.toISOString()}};
-  validateBackup(payload);
-  const stamp = dateISO(createdAt) + '-' + [createdAt.getHours(), createdAt.getMinutes(), createdAt.getSeconds()].map(v => String(v).padStart(2, '0')).join('');
-  const filename = 'arbeitszeit-backup-' + stamp + '.json';
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
-  url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  const downloadUrl = url;
-  setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
-  let timestampSaved=true;
-  try {
-   const updated={...data,lastBackupCreatedAt:createdAt.toISOString()};
-   localStorage.setItem('arbeitszeit-v3',JSON.stringify(updated));
-   data=updated;
-  }catch{timestampSaved=false;}
-  renderLastBackup();
-  backupMessage('Sicherungsdatei erstellt: ' + filename + '. Bitte den Download abschließen und die Datei aufbewahren. Auf dem iPhone kannst du sie in „Dateien“ oder iCloud Drive ablegen.'+(timestampSaved?'':' Der Zeitpunkt konnte nicht dauerhaft in der App gespeichert werden; die bisherige Anzeige bleibt erhalten.'), timestampSaved?'success':'warning');
- } catch (error) {
-  if (url) URL.revokeObjectURL(url);
-  backupMessage('Sicherung konnte nicht erstellt werden. ' + error.message, 'warning');
- }
-}
+function exportBackup() { downloadBackup(); }
 async function importBackup(event) {
  const input = event.target, file = input.files[0];
  if (!file) return;
+ if (recoveryBusy || backupSharing) { input.value = ''; return; }
  const exportButton = $('exportData');
+ setBackupBusy(true);
  input.disabled = true;
  exportButton.disabled = true;
  try {
@@ -582,7 +556,7 @@ async function importBackup(event) {
    data = restored;
    // Past plans become booked vacation using the existing application rule.
    realizePastVacation();
-   localStorage.setItem('arbeitszeit-v3', JSON.stringify(data));
+   persistAppData(JSON.stringify(data));
    calendarSelection.clear(); calendarMulti=false; calendarDrag=null;
    selected = null;
    month = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -596,7 +570,7 @@ async function importBackup(event) {
    data = previous;
    if (localStorage.getItem('arbeitszeit-v3') !== previousStored) {
     if (previousStored === null) localStorage.removeItem('arbeitszeit-v3');
-    else localStorage.setItem('arbeitszeit-v3', previousStored);
+    else persistAppData(previousStored);
    }
    calculationCache = null;
    render();
@@ -612,6 +586,7 @@ async function importBackup(event) {
   input.value = '';
   input.disabled = false;
   exportButton.disabled = false;
+  setBackupBusy(false);
  }
 }
 
@@ -624,12 +599,20 @@ function showResetDataDialog() {
  $('confirmResetData').disabled = false;
  $('resetDataDialog').showModal();
 }
-function resetAllAppData() {
+async function resetAllAppData() {
+ let recoveryBeforeReset = null, recoveryRollbackFailed = false;
  try {
-  // Only this app's complete data record; other apps on the same host stay intact.
+  recoveryResetting = true; setBackupBusy(true); $('cancelResetData').disabled = true;
+  $('confirmResetData').disabled = true;
+  await recoveryQueue;
+  // Clear both recovery points and their reminder metadata before resetting the primary record.
+  if (window.indexedDB) { recoveryBeforeReset = await recoveryTransaction(); await recoveryTransaction(() => null); }
   localStorage.removeItem('arbeitszeit-v3');
+  recoveryState = null;
  } catch {
-  $('resetDataError').textContent = 'Die Daten konnten nicht gelöscht werden. Deine bisherigen Daten bleiben erhalten. Bitte versuche es erneut.';
+  if (recoveryBeforeReset) { try { recoveryState = await recoveryTransaction(() => recoveryBeforeReset); } catch { recoveryRollbackFailed = true; } }
+  recoveryResetting = false; setBackupBusy(false); $('cancelResetData').disabled = false; $('confirmResetData').disabled = false;
+  $('resetDataError').textContent = recoveryRollbackFailed ? 'Die App-Daten konnten nicht gelöscht werden. Die internen Wiederherstellungsstände konnten jedoch nicht erhalten werden. Bitte eine Sicherungsdatei erstellen.' : 'Die Daten konnten nicht gelöscht werden. Deine bisherigen Daten bleiben erhalten. Bitte versuche es erneut.';
   $('resetDataError').hidden = false;
   return;
  }
@@ -937,7 +920,7 @@ function refreshAppDate(redraw=true) {
  if($('reportYear').value===String(previousToday.getFullYear()))$('reportYear').value=String(today.getFullYear());
  const previousData=data;data={...data,entries:{...data.entries},planned:[...data.planned]};
  let failed=false;
- try {if(realizePastVacation())localStorage.setItem('arbeitszeit-v3',JSON.stringify(data));}
+ try {if(realizePastVacation())persistAppData(JSON.stringify(data));}
  catch {data=previousData;failed=true;}
  updateReportPeriod();
  if(redraw)render();
@@ -1010,7 +993,7 @@ async function checkPwaUpdates(){
  finally{$('checkPwaUpdates').disabled=false;}
 }
 function applyPwaUpdate(){
- if($('importData').disabled){$('pwaUpdateText').textContent='Bitte zuerst die laufende Wiederherstellung abschließen.';return;}
+ if($('importData').disabled || recoveryBusy || backupSharing){$('pwaUpdateText').textContent='Bitte zuerst die laufende Wiederherstellung abschließen.';return;}
  try{capturePwaDraft();}catch{$('pwaUpdateText').textContent='Offene Eingaben konnten nicht zwischengespeichert werden. Bitte zuerst speichern; die App wurde nicht neu geladen.';return;}
  pwaUpdating=true;$('applyPwaUpdate').disabled=true;$('pwaUpdateText').textContent='Aktualisierung wird übernommen …';
  if(pwaRegistration?.waiting)pwaRegistration.waiting.postMessage({type:'ACTIVATE_UPDATE'});
@@ -1037,4 +1020,251 @@ function initPwa(){
  window.addEventListener('focus',()=>{checkPwaReady();if(navigator.onLine&&Date.now()-pwaLastCheck>60000)checkPwaUpdates();});
 }
 
-function fillSettings(){for(let k of ['initialVacation','initialTime','defaultBreak','annualVacation','startDate','theme'])$(k).value=data[k];$('shiftDate').dispatchEvent(new Event('change'))}init();initDateRefresh();initPwa()})();
+// Two local recovery points complement, but never replace, external JSON backups.
+var recoveryInitialized = false;
+let recoveryDBPromise, recoveryQueue = Promise.resolve(), recoveryState = null;
+let recoveryResetting = false, recoveryBusy = false, recoveryCapturePending = false;
+let recoveryFailure = '', backupSharing = false;
+let recoveryCaptureAllowed = false;
+const recoveryDBName = 'arbeitszeit-wiederherstellung:' + new URL('.', location.href).pathname;
+const backupFileName = 'arbeitszeit-sicherung.json';
+function persistAppData(serialized) {
+ localStorage.setItem('arbeitszeit-v3', serialized);
+ if (recoveryInitialized && !recoveryResetting) { recoveryCaptureAllowed = true; scheduleRecoveryCapture(); }
+}
+function recoverySignature(value) {
+ function stable(v) {
+  if (Array.isArray(v)) return v.map(stable);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.keys(v).sort().map(k => [k, stable(v[k])]));
+  return v;
+ }
+ const copy = {...value}; delete copy.lastBackupCreatedAt;
+ return JSON.stringify(stable(copy));
+}
+function openRecoveryDB() {
+ if (recoveryDBPromise) return recoveryDBPromise;
+ recoveryDBPromise = new Promise((resolve, reject) => {
+  if (!window.indexedDB) { reject(new Error('Lokale Wiederherstellungsstände werden hier nicht unterstützt.')); return; }
+  let settled = false, request;
+  const fail = () => { if (!settled) { settled = true; clearTimeout(timer); reject(new Error('Der zusätzliche lokale Speicher ist nicht verfügbar.')); } };
+  const timer = setTimeout(fail, 5000);
+  try { request = indexedDB.open(recoveryDBName, 1); } catch { fail(); return; }
+  request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains('recovery')) request.result.createObjectStore('recovery'); };
+  request.onerror = fail; request.onblocked = fail;
+  request.onsuccess = () => {
+   if (settled) { request.result.close(); return; }
+   settled = true; clearTimeout(timer);
+   const db = request.result;
+   db.onversionchange = () => { db.close(); recoveryDBPromise = null; };
+   resolve(db);
+  };
+ });
+ recoveryDBPromise.catch(() => { recoveryDBPromise = null; });
+ return recoveryDBPromise;
+}
+async function recoveryTransaction(change) {
+ const db = await openRecoveryDB();
+ return new Promise((resolve, reject) => {
+  let result, failure;
+  const tx = db.transaction('recovery', change ? 'readwrite' : 'readonly');
+  const store = tx.objectStore('recovery'), request = store.get('state');
+  request.onsuccess = () => {
+   try {
+    result = request.result || {current:null, previous:null, exportedSignature:null, dirtySince:null};
+    if (change) { result = change(result); if (result === null) store.delete('state'); else store.put(result, 'state'); }
+   } catch (error) { failure = error; tx.abort(); }
+  };
+  tx.oncomplete = () => resolve(result);
+  tx.onerror = tx.onabort = () => reject(failure || new Error('Der Wiederherstellungsstand konnte nicht gespeichert werden.'));
+ });
+}
+function enqueueRecovery(action) {
+ const task = recoveryQueue.then(action);
+ recoveryQueue = task.catch(() => {});
+ return task;
+}
+function showRecoveryFailure(error) {
+ recoveryFailure = error.message || 'Der zusätzliche lokale Speicher ist nicht verfügbar.';
+ renderRecovery();
+}
+function scheduleRecoveryCapture() {
+ if (recoveryCapturePending || recoveryResetting || !recoveryCaptureAllowed) return;
+ recoveryCapturePending = true;
+ queueMicrotask(() => {
+  recoveryCapturePending = false;
+  if (recoveryResetting) return;
+  enqueueRecovery(async () => {
+   recoveryState = await recoveryTransaction(record => {
+    // Read inside the transaction so delayed tasks cannot resurrect an older save or a reset record.
+    const json = localStorage.getItem('arbeitszeit-v3');
+    if (!json) return null;
+    const restored = validateBackup(JSON.parse(json)).data, signature = recoverySignature(restored);
+    const previousSignature = record.current ? recoverySignature(JSON.parse(record.current.json)) : null;
+    if (previousSignature !== signature) {
+     record.previous = record.current;
+     record.current = {createdAt:new Date().toISOString(), json:JSON.stringify(restored)};
+     if (record.exportedSignature === signature) record.dirtySince = null;
+     else if (!record.dirtySince) record.dirtySince = new Date().toISOString();
+    } else record.current.json = JSON.stringify(restored);
+    return record;
+   });
+   recoveryFailure = ''; renderRecovery();
+  }).catch(showRecoveryFailure);
+ });
+}
+function recoveryDate(value) {
+ return new Date(value).toLocaleString('de-AT', {dateStyle:'medium', timeStyle:'short'});
+}
+function renderRecovery() {
+ if (!$('recoveryStatus')) return;
+ $('recoveryStatus').textContent = recoveryFailure ? recoveryFailure + ' Die bisherigen App-Daten bleiben davon unberührt. Bitte eine Sicherungsdatei erstellen.' : recoveryState?.current ? 'Interne Wiederherstellungsstände werden nach gespeicherten Änderungen automatisch aktualisiert.' : 'Noch kein interner Wiederherstellungsstand vorhanden.';
+ for (const name of ['current','previous']) {
+  const point = recoveryState?.[name], label = name === 'current' ? 'Aktueller Stand' : 'Vorheriger Stand';
+  $('recovery'+name+'Date').textContent = point ? label + ': ' + recoveryDate(point.createdAt) : label + ': noch nicht vorhanden';
+  $('restore'+name).disabled = !point || recoveryBusy || backupSharing || !!recoveryFailure;
+ }
+ renderBackupReminder();
+}
+function renderBackupReminder() {
+ const notice = $('backupReminder');
+ if (!notice) return;
+ let overdue = false;
+ if (recoveryState?.dirtySince && recoveryState.exportedSignature !== recoverySignature(data)) {
+  overdue = Date.now() - Date.parse(recoveryState.dirtySince) >= 7 * 86400000;
+ }
+ notice.hidden = !overdue;
+ $('backupReminderText').textContent = 'Seit mindestens sieben Tagen gibt es Änderungen ohne neu erstellte Sicherungsdatei. Bitte eine Sicherung speichern und die Ablage abschließen.';
+}
+function setBackupBusy(busy) {
+ recoveryBusy = busy;
+ for (const id of ['exportData','shareBackup','importData','saveBackupFolder','resetData','checkRecoveryStorage']) $(id).disabled = busy;
+ renderRecovery();
+}
+function backupFolderMessage() {
+ const folder = data.backupFolderHint?.trim();
+ return folder ? ' Dein Ordnerhinweis: ' + folder + '.' : '';
+}
+function createBackupPayload() {
+ const timestamp = new Date().toISOString();
+ const payload = {format:backupFormat, version:backupVersion, createdAt:timestamp, data:{...data, lastBackupCreatedAt:timestamp}};
+ validateBackup(payload);
+ return payload;
+}
+function backupBlob(payload) { return new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'}); }
+function finishExternalBackup(payload, message) {
+ let timestampSaved = true;
+ try {
+  // A share dialog can stay open while another tab saves data. Do not overwrite those changes.
+  const latest = JSON.parse(localStorage.getItem('arbeitszeit-v3') || JSON.stringify(data));
+  const updated = {...latest, lastBackupCreatedAt:payload.createdAt};
+  persistAppData(JSON.stringify(updated)); data = updated;
+ } catch { timestampSaved = false; }
+ renderLastBackup();
+ backupMessage(message + backupFolderMessage() + ' Die dauerhafte Ablage der Datei bitte selbst prüfen.' + (timestampSaved ? '' : ' Der Zeitpunkt konnte nicht dauerhaft in der App gespeichert werden; die bisherige Anzeige bleibt erhalten.'), timestampSaved ? 'success' : 'warning');
+ const signature = recoverySignature(payload.data);
+ enqueueRecovery(async () => {
+  recoveryState = await recoveryTransaction(record => {
+   record.exportedSignature = signature;
+   record.dirtySince = recoverySignature(data) === signature ? null : (record.dirtySince || new Date().toISOString());
+   return record;
+  });
+  recoveryFailure = ''; renderRecovery();
+ }).catch(showRecoveryFailure);
+}
+function downloadBackup() {
+ let url;
+ try {
+  const payload = createBackupPayload();
+  url = URL.createObjectURL(backupBlob(payload));
+  const link = document.createElement('a'); link.href = url; link.download = backupFileName;
+  document.body.appendChild(link); link.click(); link.remove();
+  const downloadURL = url; setTimeout(() => URL.revokeObjectURL(downloadURL), 60000);
+  finishExternalBackup(payload, 'Sicherungsdatei erstellt: ' + backupFileName + '. Bitte den Download abschließen.');
+ } catch (error) {
+  if (url) URL.revokeObjectURL(url);
+  backupMessage('Sicherung konnte nicht erstellt werden. ' + error.message, 'warning');
+ }
+}
+function shareBackupFile() {
+ if (recoveryBusy || backupSharing) return;
+ try {
+  const payload = createBackupPayload(), file = new File([backupBlob(payload)], backupFileName, {type:'application/json'});
+  if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function' || !navigator.canShare({files:[file]})) {
+   backupMessage('Das Teilen dieser Datei wird hier nicht unterstützt. Bitte „Sicherungsdatei herunterladen“ verwenden.' + backupFolderMessage(), 'warning'); return;
+  }
+  // Call directly during the tap, before awaiting any asynchronous operation.
+  const result = navigator.share({files:[file], title:'Arbeitszeit-Sicherung'});
+  backupSharing = true; setBackupBusy(true);
+  Promise.resolve(result).then(() => finishExternalBackup(payload, 'Sicherungsdatei an die Teilenfunktion übergeben. Unter „In Dateien sichern“ den gewünschten Ordner wählen.')).catch(error => {
+   backupMessage(error.name === 'AbortError' ? 'Teilen abgebrochen. Der Sicherungszeitpunkt bleibt unverändert.' : 'Teilen nicht möglich. Bitte „Sicherungsdatei herunterladen“ verwenden.', error.name === 'AbortError' ? '' : 'warning');
+  }).finally(() => { backupSharing = false; setBackupBusy(false); });
+ } catch (error) { backupMessage('Sicherung konnte nicht geteilt werden. ' + error.message, 'warning'); }
+}
+function saveBackupFolder() {
+ const value = $('backupFolderHint').value.trim();
+ if (value.length > 240) { backupMessage('Der Ordnerhinweis darf höchstens 240 Zeichen enthalten.', 'warning'); return; }
+ const previous = data;
+ try {
+  data = {...data, backupFolderHint:value}; persistAppData(JSON.stringify(data));
+  backupMessage(value ? 'Ordnerhinweis gespeichert. Beim Sichern den Ordner selbst unter „Dateien“ auswählen.' : 'Ordnerhinweis entfernt.', 'success');
+ } catch { data = previous; backupMessage('Der Ordnerhinweis konnte nicht gespeichert werden.', 'warning'); }
+}
+async function restoreRecoveryPoint(name) {
+ if (recoveryBusy || $('importData').disabled) return;
+ setBackupBusy(true);
+ try {
+  await Promise.resolve(); await recoveryQueue;
+  const state = await recoveryTransaction(), point = state[name];
+  if (!point) throw new Error('Dieser Wiederherstellungsstand ist nicht mehr verfügbar.');
+  const restored = validateBackup(JSON.parse(point.json)).data;
+  if (!confirm('Internen Stand vom ' + recoveryDate(point.createdAt) + ' wiederherstellen?\n\n' + Object.keys(restored.entries).length + ' erfasste Tage und alle Einstellungen. Die aktuellen App-Daten werden ersetzt.')) return;
+  const previous = data, previousStored = localStorage.getItem('arbeitszeit-v3');
+  try {
+   data = restored; realizePastVacation(); persistAppData(JSON.stringify(data));
+   refreshRestoredData();
+  } catch (error) {
+   data = previous;
+   if (previousStored === null) localStorage.removeItem('arbeitszeit-v3'); else persistAppData(previousStored);
+   refreshRestoredData(); throw error;
+  }
+  backupMessage('Interner Stand vom ' + recoveryDate(point.createdAt) + ' wiederhergestellt. Bitte bei Bedarf zusätzlich eine Sicherungsdatei erstellen.', 'success');
+ } catch (error) { backupMessage('Wiederherstellung nicht möglich. ' + error.message, 'warning'); }
+ finally { setBackupBusy(false); }
+}
+function refreshRestoredData() {
+ calendarSelection.clear(); calendarMulti = false; calendarDrag = null; selected = null;
+ month = new Date(today.getFullYear(), today.getMonth(), 1); calculationCache = null;
+ render(); fillSettings(); resetEntry(); $('planInfo').textContent = ''; $('deleteStatus').hidden = true;
+}
+async function checkRecoveryStorage() {
+ if (recoveryBusy) return;
+ $('checkRecoveryStorage').disabled = true;
+ try {
+  await recoveryQueue; recoveryState = await recoveryTransaction(); recoveryFailure = ''; renderRecovery();
+  scheduleRecoveryCapture();
+ } catch (error) { showRecoveryFailure(error); }
+ finally { $('checkRecoveryStorage').disabled = false; }
+}
+function initRecovery() {
+ recoveryInitialized = true;
+ recoveryCaptureAllowed = primaryWasPresent && !primaryLoadFailed;
+ $('shareBackup').onclick = shareBackupFile;
+ $('saveBackupFolder').onclick = saveBackupFolder;
+ $('restorecurrent').onclick = () => restoreRecoveryPoint('current');
+ $('restoreprevious').onclick = () => restoreRecoveryPoint('previous');
+ $('checkRecoveryStorage').onclick = checkRecoveryStorage;
+ $('resetDataDialog').addEventListener('cancel', event => { if (recoveryResetting) event.preventDefault(); });
+ $('openBackupReminder').onclick = () => { switchTab('settings'); $('backupCard').open = true; $('backupCard').scrollIntoView({block:'start'}); };
+ enqueueRecovery(async () => { recoveryState = await recoveryTransaction(); renderRecovery(); }).catch(showRecoveryFailure);
+ if (primaryWasPresent && !primaryLoadFailed) scheduleRecoveryCapture();
+ window.addEventListener('focus', () => { if (!recoveryBusy && !recoveryResetting) checkRecoveryStorage(); });
+ window.addEventListener('storage', event => {
+  if (event.key === 'arbeitszeit-v3') {
+   // Read the shared primary record for snapshots, without discarding this tab's open forms.
+   if (event.newValue !== null) { recoveryCaptureAllowed = true; scheduleRecoveryCapture(); }
+   else { recoveryState = null; renderRecovery(); }
+  }
+ });
+}
+
+function fillSettings(){for(let k of ['initialVacation','initialTime','defaultBreak','annualVacation','startDate','theme'])$(k).value=data[k];$('shiftDate').dispatchEvent(new Event('change'));$('backupFolderHint').value=data.backupFolderHint||''}init();initDateRefresh();initPwa();initRecovery()})();
