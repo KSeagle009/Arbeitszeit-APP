@@ -1,5 +1,5 @@
 
-(()=>{'use strict';const APP_VERSION='1.1';const $=id=>document.getElementById(id),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay());let today=new Date(),todayStr=dateISO(today);const defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},weekWorkplaces:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data,primaryWasPresent=false,primaryLoadFailed=false;try{const stored=localStorage.getItem('arbeitszeit-v3');primaryWasPresent=stored!==null;data={...defaultData,...JSON.parse(stored||'{}')}}catch{primaryLoadFailed=true;data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];data.weekWorkplaces=data.weekWorkplaces||{};if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';if(!primaryLoadFailed)persistAppData(JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false,entryWorkplaceTouched=false;function save(){realizePastVacation();persistAppData(JSON.stringify(data));render()}
+(()=>{'use strict';const APP_VERSION='1.2';const $=id=>document.getElementById(id),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay());let today=new Date(),todayStr=dateISO(today);const defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},weekWorkplaces:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data,primaryWasPresent=false,primaryLoadFailed=false;try{const stored=localStorage.getItem('arbeitszeit-v3');primaryWasPresent=stored!==null;data={...defaultData,...JSON.parse(stored||'{}')}}catch{primaryLoadFailed=true;data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];data.weekWorkplaces=data.weekWorkplaces||{};if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';if(!primaryLoadFailed)persistAppData(JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false,entryWorkplaceTouched=false;function save(){clearPlanningCache();realizePastVacation();persistAppData(JSON.stringify(data));render()}
 // Vacation calendar: statutory Austrian holidays plus the user's free days.
 // The extra free days do not change the separate overtime premium rules.
 function vacationHolidayName(date) {
@@ -215,24 +215,174 @@ function renderCalendar() {
 }
 
 function annualDates(until){let out=[];for(let y=dateObj(data.startDate).getFullYear();y<=dateObj(until).getFullYear();y++){let d=`${y}-04-01`;if(d>data.startDate&&d<=until)out.push(d)}return out}function vacationAt(until){let n=Number(data.initialVacation)||0;if(until<data.startDate)return n;for(let d of annualDates(until))n+=Number(data.annualVacation)||0;for(let c of data.credits)if(c.date>=data.startDate&&c.date<=until)n+=Number(c.days)||0;for(let [date,e] of Object.entries(data.entries))if(date>=data.startDate&&date<=until&&e.type==='TU'&&vacationWorkday(date))n--;for(let d of data.planned)if(d>=data.startDate&&d<=until&&!data.entries[d]&&vacationWorkday(d))n--;return n}function futureApril(){let y=today.getFullYear();return todayStr<`${y}-04-01`?`${y}-04-01`:`${y+1}-04-01`}function forecastEnd(){let ds=[todayStr,futureApril(),...data.planned.filter(d=>d>=todayStr&&vacationWorkday(d)),...Object.keys(data.entries).filter(d=>d>=todayStr&&data.entries[d].type==='TU'&&vacationWorkday(d))];return ds.sort().at(-1)}function warnings(){let current=vacationAt(todayStr);if(current<0)return `⚠️ Aktuell fehlen ${fmt(-current)} Urlaubstage. Der eingetragene Urlaub bleibt gespeichert.`;let ds=[...new Set([...data.planned,...Object.keys(data.entries).filter(d=>data.entries[d].type==='TU')])].filter(d=>d>=todayStr&&vacationWorkday(d)).sort();let first=ds.find(d=>vacationAt(d)<0);return first?`⚠️ Am ${formatDate(first)} fehlen voraussichtlich ${fmt(-vacationAt(first))} Urlaubstage. Die Planung bleibt trotzdem gespeichert.`:''}function weekKey(s){let d=dateObj(s),dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow+3);let y=d.getFullYear(),jan4=new Date(y,0,4,12);let wd=(jan4.getDay()+6)%7;jan4.setDate(jan4.getDate()-wd+3);return `${y}-KW${String(1+Math.round((d-jan4)/604800000)).padStart(2,'0')}`}
-const standardShifts=['05:30-13:30','06:00-14:00','13:30-21:30','14:00-22:00','18:00-02:00','21:30-05:30','22:00-06:00'],dayNames=['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
-function validShift(s){return typeof s==='string'&&/^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(s)&&s.slice(0,5)!==s.slice(6)}
-function monday(s){return addDays(s,-((dateObj(s).getDay()+6)%7))}
-function dateForWeek(k){let match=/^(\d{4})-KW(\d{2})$/.exec(k);if(!match)return null;let s=monday(match[1]+'-01-04');s=addDays(s,(Number(match[2])-1)*7);return weekKey(s)===k?s:null}
-function shiftForDate(s){let k=weekKey(s),day=(dateObj(s).getDay()+6)%7,override=data.shiftDays[k]?.[day];return validShift(override)?override:validShift(data.shifts[k])?data.shifts[k]:'06:00-14:00'}
-function shiftOptions(){let all=[...standardShifts,...data.customShifts,...Object.values(data.shifts),...Object.values(data.shiftDays).flatMap(d=>Object.values(d||{}))];return [...new Set(all.filter(validShift))].map(s=>'<option value="'+s+'">'+s.replace('-','–')+(standardShifts.includes(s)?'':' · Eigene Schicht')+'</option>').join('')}
-function renderWeekWorkplace(value=data.weekWorkplaces[weekKey($('shiftDate').value)]||'') {
- const names=[...new Set([...data.workplaces,...(value?[value]:[])])];
- $('shiftWorkplace').innerHTML='<option value="">Kein Arbeitsplatz</option>'+names.map(name=>'<option>'+escapeHtml(name)+'</option>').join('');
- $('shiftWorkplace').value=value;
+const ShiftPlanning=(()=>{
+ const standard=['05:30-13:30','06:00-14:00','13:30-21:30','14:00-22:00','18:00-02:00','21:30-05:30','22:00-06:00'];
+ const names=['Früh 05:30','Früh','Nachmittag 13:30','Nachmittag','Spät','Nacht 21:30','Nacht'];
+ const day=s=>new Date(s+'T12:00:00Z'),iso=d=>d.toISOString().slice(0,10),add=(s,n)=>{const d=day(s);d.setUTCDate(d.getUTCDate()+n);return iso(d)};
+ const validDate=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number.isFinite(day(s).getTime())&&iso(day(s))===s;
+ const mon=s=>add(s,-((day(s).getUTCDay()+6)%7));
+ function key(s){const d=day(mon(s));d.setUTCDate(d.getUTCDate()+3);const y=d.getUTCFullYear(),jan=day(String(y).padStart(4,'0')+'-01-04');jan.setUTCDate(jan.getUTCDate()-((jan.getUTCDay()+6)%7)+3);return String(y).padStart(4,'0')+'-KW'+String(1+Math.round((d-jan)/604800000)).padStart(2,'0')}
+ function weekDate(k){const m=/^(\d{4})-KW(\d{2})$/.exec(k);if(!m||!validDate(m[1]+'-01-04'))return null;const s=add(mon(m[1]+'-01-04'),(Number(m[2])-1)*7);return key(s)===k?s:null}
+ const time=s=>typeof s==='string'&&/^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+ const shift=s=>typeof s==='string'&&s.length===11&&time(s.slice(0,5))&&time(s.slice(6))&&s[5]==='-'&&s.slice(0,5)!==s.slice(6);
+ const minutes=s=>Number(s.slice(0,2))*60+Number(s.slice(3));
+ const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+ function validVersion(v){
+  if(!object(v)||!validDate(v.validFrom)||typeof v.name!=='string'||!v.name.trim()||v.name.length>80||!shift(v.shift)||typeof v.active!=='boolean'||!Number.isInteger(v.break)||v.break<0||v.break>600)return false;
+  const a=minutes(v.shift.slice(0,5)),b=minutes(v.shift.slice(6))+(v.shift.slice(6)<v.shift.slice(0,5)?1440:0);
+  if(v.break>=b-a)return false;
+  if(v.breakStart===null||v.breakStart==='')return true; // legacy duration-only pause
+  if(!time(v.breakStart))return false;
+  let p=minutes(v.breakStart);if(p<a&&b>=1440)p+=1440;
+  return v.break===0||p>=a&&p+v.break<=b;
+ }
+ function legacy(state,s){const k=key(s),d=(day(s).getUTCDay()+6)%7,value=state.shiftDays?.[k]?.[d];return shift(value)?value:shift(state.shifts?.[k])?state.shifts[k]:'06:00-14:00'}
+ function initial(state){
+  const all=[...new Set([...standard,...(state.customShifts||[]),...Object.values(state.shifts||{}),...Object.values(state.shiftDays||{}).flatMap(x=>Object.values(x||{}))].filter(shift))];
+  const pause=Number.isInteger(state.defaultBreak)&&state.defaultBreak>=0?state.defaultBreak:18;
+  const templates=all.map((s,i)=>{const a=minutes(s.slice(0,5)),b=minutes(s.slice(6)),duration=(b-a+1440)%1440;return {id:'s'+i,versions:[{validFrom:'0001-01-01',name:names[standard.indexOf(s)]||s.replace('-','–'),shift:s,break:Math.min(pause,duration-1),breakStart:null,active:true}]}});
+  const weeks={};for(const k of new Set([...Object.keys(state.shifts||{}),...Object.keys(state.shiftDays||{})])){if(!weekDate(k))continue;const days=Object.fromEntries(Object.entries(state.shiftDays?.[k]||{}).filter(([d,s])=>/^[0-6]$/.test(d)&&shift(s)));weeks[k]={legacyShift:shift(state.shifts?.[k])?state.shifts[k]:'06:00-14:00',legacyDays:days};}
+  const entryShifts=Object.fromEntries(Object.entries(state.entries||{}).filter(([,e])=>e.type==='Arbeit').map(([s])=>[s,legacy(state,s)]));
+  return {version:1,templates,rhythms:[{validFrom:'0001-01-01',cycle:[templates.find(t=>t.versions[0].shift==='06:00-14:00').id]}],weeks,entryShifts};
+ }
+ function version(plan,id,s){return plan.templates.find(t=>t.id===id)?.versions.filter(v=>v.validFrom<=s).sort((a,b)=>a.validFrom.localeCompare(b.validFrom)).at(-1)||null}
+ function rhythm(plan,s){return plan.rhythms.filter(r=>r.validFrom<=mon(s)).sort((a,b)=>a.validFrom.localeCompare(b.validFrom)).at(-1)||null}
+ function automatic(plan,s){const r=rhythm(plan,s);if(!r)return null;const n=Math.round((day(mon(s))-day(r.validFrom))/604800000),index=((n%r.cycle.length)+r.cycle.length)%r.cycle.length;return {id:r.cycle[index],index,length:r.cycle.length,validFrom:r.validFrom}}
+ function planned(plan,state,s){
+  const k=key(s),week=plan.weeks[k],weekday=(day(s).getUTCDay()+6)%7;
+  const fallback=value=>({shift:value,break:state.defaultBreak??18,breakStart:null,name:'Übernommene Schicht',source:'legacy'});
+  // Weekends receive no new automatic rhythm; old weekend plans remain readable.
+  if(weekday>4)return {...fallback(week?.legacyDays?.[weekday]||week?.legacyShift||legacy(state,s)),source:'weekend'};
+  if(week?.templateId){const v=version(plan,week.templateId,s);if(v)return {...v,id:week.templateId,source:'week'};}
+  if(week?.legacyShift)return fallback(week.legacyDays?.[weekday]||week.legacyShift);
+  const a=automatic(plan,s),v=a&&version(plan,a.id,s);
+  return v?{...v,id:a.id,source:'rhythm',rhythmWeek:a.index+1}:fallback(legacy(state,s));
+ }
+ function calculationShift(plan,state,s){return plan.entryShifts[s]||planned(plan,state,s).shift}
+ function validate(plan,state){
+  const check=(ok,message)=>{if(!ok)throw Error(message)};
+  check(object(plan)&&plan.version===1&&Array.isArray(plan.templates)&&plan.templates.length>0&&plan.templates.length<=500&&Array.isArray(plan.rhythms)&&plan.rhythms.length>0&&plan.rhythms.length<=1000&&object(plan.weeks)&&object(plan.entryShifts),'Die Schichtplanung in der Sicherung ist ungültig.');
+  const ids=new Set();
+  for(const t of plan.templates){check(object(t)&&typeof t.id==='string'&&/^[a-zA-Z0-9_-]{1,80}$/.test(t.id)&&!ids.has(t.id)&&Array.isArray(t.versions)&&t.versions.length>0&&t.versions.length<=1000,'Eine Schichtvorlage ist ungültig oder doppelt.');ids.add(t.id);const dates=new Set();for(const v of t.versions){check(validVersion(v)&&!dates.has(v.validFrom),'Eine Schichtversion oder deren Pause ist ungültig.');dates.add(v.validFrom);}}
+  const dates=new Set();for(const r of plan.rhythms){check(object(r)&&validDate(r.validFrom)&&mon(r.validFrom)===r.validFrom&&!dates.has(r.validFrom)&&Array.isArray(r.cycle)&&r.cycle.length>=1&&r.cycle.length<=4&&r.cycle.every(id=>ids.has(id)&&version(plan,id,r.validFrom)),'Ein Schichtrhythmus ist ungültig.');dates.add(r.validFrom);}
+  for(const [k,w]of Object.entries(plan.weeks)){check(!!weekDate(k)&&object(w),'Eine Schichtwoche ist ungültig.');check(w.templateId!==undefined||w.legacyShift!==undefined||object(w.legacyDays)&&Object.keys(w.legacyDays).length>0,'Eine Schichtwoche enthält keine Vorgabe.');if(w.templateId!==undefined)check(ids.has(w.templateId)&&!!version(plan,w.templateId,weekDate(k)),'Eine Wochenschicht verweist auf eine ungültige Vorlage.');if(w.legacyShift!==undefined)check(shift(w.legacyShift),'Eine übernommene Schicht ist ungültig.');if(w.legacyDays!==undefined)check(object(w.legacyDays)&&Object.entries(w.legacyDays).every(([d,s])=>/^[0-6]$/.test(d)&&shift(s)),'Eine übernommene Tagesschicht ist ungültig.');}
+  for(const [s,value]of Object.entries(plan.entryShifts))check(validDate(s)&&shift(value)&&state.entries?.[s]?.type==='Arbeit','Eine gespeicherte Schichtzuordnung ist ungültig.');
+  for(const [s,e]of Object.entries(state.entries||{}))if(e.type==='Arbeit')check(shift(plan.entryShifts[s]),'Eine Schichtzuordnung für einen erfassten Tag fehlt.');
+  return plan;
+ }
+ return {standard,validDate,time,shift,validVersion,legacy,initial,version,rhythm,automatic,planned,calculationShift,validate,weekDate,mon,key,add};
+})();
+
+let planningView='weeks',planningCache=null,planningCacheOwner=null;
+function getPlanning(){if(data.shiftPlanning)return data.shiftPlanning;if(planningCacheOwner!==data||!planningCache){planningCacheOwner=data;planningCache=ShiftPlanning.initial(data);}return planningCache;}
+function clearPlanningCache(){planningCache=null;planningCacheOwner=null;}
+const standardShifts=ShiftPlanning.standard,dayNames=['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
+function validShift(s){return ShiftPlanning.shift(s)}
+function monday(s){return ShiftPlanning.mon(s)}
+function dateForWeek(k){return ShiftPlanning.weekDate(k)}
+function shiftForDate(s){return ShiftPlanning.calculationShift(getPlanning(),data,s)}
+function plannedShiftForDate(s){return ShiftPlanning.planned(getPlanning(),data,s)}
+function planningMessage(text,warning=false){$('planningStatus').hidden=false;$('planningStatus').className='notice '+(warning?'warning':'success');$('planningStatus').textContent=text;}
+function commitPlanning(change,message){
+ const previous=data,next=JSON.parse(JSON.stringify(data));next.shiftPlanning=JSON.parse(JSON.stringify(getPlanning()));
+ // Freeze every recorded day's calculation context before changing a plan.
+ for(const [s,e]of Object.entries(next.entries))if(e.type==='Arbeit'&&!next.shiftPlanning.entryShifts[s])next.shiftPlanning.entryShifts[s]=shiftForDate(s);
+ try{change(next.shiftPlanning,next);ShiftPlanning.validate(next.shiftPlanning,next);data=next;clearPlanningCache();save();}
+ catch(error){data=previous;clearPlanningCache();render();planningMessage(error.message||'Die Planung konnte nicht gespeichert werden. Der vorherige Stand bleibt erhalten.',true);return false;}
+ if(editing===null){if(!entryTimesTouched)applyEntryShift();if(!entryWorkplaceTouched)applyEntryWorkplace();renderEntryCalculation();}
+ planningMessage(message);return true;
 }
-function applyEntryWorkplace() {
- if(editing===null) {entryWorkplaceTouched=false;renderEntryWorkplaces(data.weekWorkplaces[weekKey($('entryDate').value)]||'');}
+function templateChoices(date,selected='',includeDisabled=false){
+ return getPlanning().templates.map(t=>{const v=ShiftPlanning.version(getPlanning(),t.id,date);return v&&(v.active||t.id===selected||includeDisabled)?'<option value="'+escapeHtml(t.id)+'"'+(t.id===selected?' selected':'')+(!v.active?' disabled':'')+'>'+escapeHtml(v.name)+(v.active?'':' · deaktiviert')+'</option>':''}).join('');
 }
-function renderShiftList(){let keys=[...new Set([...Object.keys(data.shifts),...Object.keys(data.shiftDays),...Object.keys(data.weekWorkplaces)])].filter(k=>dateForWeek(k)).sort().reverse();$('shiftList').innerHTML=keys.map(k=>{let m=dateForWeek(k),n=Object.values(data.shiftDays[k]||{}).filter(validShift).length;return '<div class="item"><span><b>'+k.replace('-KW',' · KW ')+'</b><br><small>'+formatDate(m)+'–'+formatDate(addDays(m,6))+'<br>'+escapeHtml((data.shifts[k]||'06:00-14:00').replace('-','–'))+(n?' · '+n+' angepasste Tage':' · gesamte Woche')+(data.weekWorkplaces[k]?'<br>Arbeitsplatz: '+escapeHtml(data.weekWorkplaces[k]):'')+'</small></span><button type="button" class="secondary" data-editshift="'+k+'">Bearbeiten</button></div>'}).join('')||'<p class="muted">Noch keine Wochen gespeichert.</p>'}
-function loadShiftWeek(){let s=$('shiftDate').value,ok=!!s;$('saveShift').disabled=!ok;$('shiftPrev').disabled=!ok;$('shiftNext').disabled=!ok;if(!ok){$('shiftWeekLabel').textContent='Woche auswählen';$('shiftRange').textContent='';$('shiftInfo').textContent='Bitte ein Datum auswählen.';return}let k=weekKey(s),m=monday(s);$('shiftWeekLabel').textContent=k.replace('-KW',' · KW ');$('shiftRange').textContent=formatDate(m)+' bis '+formatDate(addDays(m,6))+' · Montag bis Sonntag';$('shiftSelect').innerHTML=shiftOptions();$('shiftSelect').value=data.shifts[k]||'06:00-14:00';$('shiftDayFields').innerHTML=dayNames.map((name,i)=>'<label for="shiftDay'+i+'">'+name+' · '+formatDate(addDays(m,i))+'</label><select id="shiftDay'+i+'"><option value="">Wochenschicht übernehmen</option>'+shiftOptions()+'</select>').join('');for(let i=0;i<7;i++)$('shiftDay'+i).value=data.shiftDays[k]?.[i]||'';renderWeekWorkplace();$('shiftInfo').textContent=data.shifts[k]||data.shiftDays[k]||data.weekWorkplaces[k]?'Gespeicherter Wochenplan – Änderungen mit „Wochenplan speichern“ übernehmen.':'Für diese Woche ist noch kein Plan gespeichert.';renderShiftList()}
-function renderEntryShiftHint(){let s=$('entryDate').value;if(!s)return;$('entryShiftHint').textContent=weekKey(s).replace('-KW',' · KW ')+' · Schicht '+shiftForDate(s).replace('-','–')+' · '+(editing?'Gespeicherte Arbeitszeiten werden beibehalten.':'Vorgabe aus dem Wochenplan; Uhrzeiten sind frei anpassbar.')}
-function applyEntryShift(){let s=$('entryDate').value;if(s&&editing===null){let [start,end]=shiftForDate(s).split('-');$('entryStart').value=start;$('entryEnd').value=end;entryTimesTouched=false}renderEntryShiftHint()}
+function renderPlanningView(){for(const button of document.querySelectorAll('[data-planning-tab]')){const active=button.dataset.planningTab===planningView;button.setAttribute('aria-selected',String(active));$('planPanel-'+button.dataset.planningTab).hidden=!active;}}
+function renderPlanningWeeks(){
+ const value=$('shiftDate').value;if(!ShiftPlanning.validDate(value)){$('planningWeeks').innerHTML='<p class="mini">Bitte ein Datum auswählen.</p>';return;}
+ const start=monday(value),plan=getPlanning();
+ $('planningWeeks').innerHTML=Array.from({length:4},(_,i)=>{
+  const s=addDays(start,i*7),k=weekKey(s),w=plan.weeks[k],v=plannedShiftForDate(s),auto=ShiftPlanning.automatic(plan,s),chosen=w?.templateId||'',workplace=data.weekWorkplaces[k]||'';
+  const title=k.replace('-KW',' · KW '),legacy=w?.legacyShift&&!w?.templateId;
+  const label=legacy?'Übernommener Wochenplan':w?.templateId?'Nur diese Woche geändert':auto?'Automatisch · Rhythmuswoche '+(auto.index+1):'Standardvorgabe';
+  const workplaceNames=[...new Set([...data.workplaces,...(workplace?[workplace]:[])])];
+  const variation=Array.from({length:5},(_,d)=>plannedShiftForDate(addDays(s,d))).some(day=>day.shift!==v.shift||day.break!==v.break||day.breakStart!==v.breakStart);
+  return '<div class="planning-week-card '+(s===monday(todayStr)?'is-current':'')+'"><div class="planning-week-title"><strong>'+escapeHtml(title)+'</strong>'+(s===monday(todayStr)?'<span class="planning-current">Aktuell</span>':'')+'</div><div class="mini">'+formatDate(s)+'–'+formatDate(addDays(s,4))+' · Mo–Fr</div><div class="planning-choice"><label for="planShift-'+k+'">Schicht</label><select id="planShift-'+k+'" data-plan-week="'+k+'"><option value="rhythm"'+(!w?' selected':'')+'>'+escapeHtml((auto&&ShiftPlanning.version(plan,auto.id,s))?.name||'Standard')+' · Rhythmus</option>'+(legacy?'<option value="legacy" selected>'+escapeHtml(v.shift.replace('-','–'))+'</option>':'')+templateChoices(s,chosen)+'</select></div><div class="planning-choice"><label for="planWorkplace-'+k+'">Arbeitsplatz</label><select id="planWorkplace-'+k+'" data-plan-workplace="'+k+'"><option value="">Bei Erfassung wählen</option>'+workplaceNames.map(name=>'<option'+(name===workplace?' selected':'')+'>'+escapeHtml(name)+'</option>').join('')+'</select></div><div class="mini planning-week-info">'+escapeHtml(v.shift.replace('-','–'))+(v.shift.slice(6)<v.shift.slice(0,5)?' · Ende am Folgetag':'')+'<br>Pause: '+(v.breakStart?escapeHtml(v.breakStart)+' · ':'')+fmt(v.break)+' min'+(!v.breakStart&&v.break?' · Uhrzeit noch ergänzen':'')+'<br>'+label+(variation?'<br>Übernommene Tagesabweichungen oder eine Vorlagenänderung gelten innerhalb dieser Woche.':'')+'</div></div>';
+ }).join('');
+}
+function renderPlanningTemplates(){
+ const plan=getPlanning();$('planningTemplates').innerHTML=plan.templates.map(t=>{
+  const current=ShiftPlanning.version(plan,t.id,todayStr),latest=t.versions.slice().sort((a,b)=>a.validFrom.localeCompare(b.validFrom)).at(-1),v=current||latest;
+  return '<div class="planning-template-row"><div><strong>'+escapeHtml(v.name)+'</strong><div class="mini">'+escapeHtml(v.shift.replace('-','–'))+(v.shift.slice(6)<v.shift.slice(0,5)?' · Folgetag':'')+'<br>Pause: '+(v.breakStart?escapeHtml(v.breakStart)+' · ':'')+fmt(v.break)+' min'+(!v.breakStart&&v.break?' · Uhrzeit ergänzen':'')+(current&&!current.active?'<br>Deaktiviert':'')+(latest.validFrom>todayStr?'<br>Neue Fassung ab '+formatDate(latest.validFrom):'')+'</div></div><button type="button" class="secondary" data-edit-template="'+escapeHtml(t.id)+'">Bearbeiten</button></div>';
+ }).join('');
+ $('rhythmHistory').innerHTML=plan.rhythms.slice().sort((a,b)=>b.validFrom.localeCompare(a.validFrom)).map(r=>'<div class="mini">'+(r.validFrom==='0001-01-01'?'Bisherige Standardvorgabe':'Ab '+formatDate(r.validFrom))+' · '+r.cycle.map(id=>escapeHtml((ShiftPlanning.version(plan,id,r.validFrom)||{}).name||'Schicht')).join(' → ')+(r.validFrom!=='0001-01-01'?'<br><button type="button" class="secondary" data-edit-rhythm="'+r.validFrom+'">Ansehen / bearbeiten</button>':'')+'</div>').join('');
+}
+function renderShiftList(){renderPlanningWeeks();renderPlanningTemplates();renderPlanningView();}
+function loadShiftWeek(){renderPlanningWeeks();}
+function loadRhythmFields(values){
+ const length=Number($('rhythmLength').value),date=$('rhythmStart').value;
+ if(!ShiftPlanning.validDate(date)){$('rhythmWeekHint').textContent='Bitte eine Startwoche wählen.';return;}
+ const start=monday(date),plan=getPlanning(),r=ShiftPlanning.rhythm(plan,start)||plan.rhythms[0];
+ const old=values||Array.from(document.querySelectorAll('[data-rhythm-week]')).map(el=>el.value);
+ $('rhythmWeekHint').textContent='Woche 1: '+weekKey(start).replace('-KW',' · KW ')+' · ab Montag, '+formatDate(start);
+ $('rhythmFields').innerHTML=Array.from({length},(_,i)=>{
+  const selected=old[i]||r?.cycle[i]||r?.cycle[0]||plan.templates[0].id;
+  return '<div class="planning-rhythm-row"><label for="rhythmWeek'+i+'">Woche '+(i+1)+'</label><select id="rhythmWeek'+i+'" data-rhythm-week="'+i+'" required>'+templateChoices(start,selected)+'</select></div>';
+ }).join('');
+}
+function loadRhythmEditor(r){r=r||ShiftPlanning.rhythm(getPlanning(),todayStr)||getPlanning().rhythms[0];$('rhythmLength').value=String(r.cycle.length);$('rhythmStart').value=r.validFrom==='0001-01-01'?monday(todayStr):r.validFrom;loadRhythmFields(r.cycle);}
+function openTemplateEditor(id=''){
+ const plan=getPlanning(),template=plan.templates.find(t=>t.id===id),v=template&&(ShiftPlanning.version(plan,id,todayStr)||template.versions[0]);
+ $('templateEditingId').value=id;$('templateEditorTitle').textContent=template?'Schichtvorlage bearbeiten':'Neue Schichtvorlage';
+ $('templateName').value=v?.name||'';$('templateStart').value=v?.shift.slice(0,5)||'06:00';$('templateEnd').value=v?.shift.slice(6)||'14:00';$('templateBreak').value=v?.break??data.defaultBreak;$('templateBreakStart').value=v?.breakStart||'';$('templateValidFrom').value=todayStr;
+ $('archiveShiftTemplate').hidden=!template;$('archiveShiftTemplate').textContent=v&&!v.active?'Ab Datum aktivieren':'Ab Datum deaktivieren';$('templateForm').hidden=false;renderTemplateHistory(id);
+}
+function renderTemplateHistory(id){const template=getPlanning().templates.find(t=>t.id===id);$('templateHistory').innerHTML=template?template.versions.slice().sort((a,b)=>b.validFrom.localeCompare(a.validFrom)).map(v=>'<div class="mini">'+(v.validFrom==='0001-01-01'?'Übernommene Vorgabe':'Ab '+formatDate(v.validFrom))+' · '+escapeHtml(v.name)+' · '+escapeHtml(v.shift.replace('-','–'))+' · '+fmt(v.break)+' min'+(v.active?'':' · deaktiviert')+'</div>').join(''):'<p class="mini">Noch keine gespeicherte Fassung.</p>';}
+function saveTemplate(event){
+ event.preventDefault();const id=$('templateEditingId').value||'t'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+ const v={validFrom:$('templateValidFrom').value,name:$('templateName').value.trim(),shift:$('templateStart').value+'-'+$('templateEnd').value,break:Number($('templateBreak').value),breakStart:$('templateBreakStart').value||null,active:true};
+ if(!ShiftPlanning.validVersion(v)||v.break>0&&!v.breakStart){planningMessage('Bitte Name, unterschiedliche Schichtzeiten, Gültigkeitsdatum und eine passende Pause mit Beginn innerhalb der Schicht angeben.',true);return;}
+ if(commitPlanning(plan=>{let t=plan.templates.find(t=>t.id===id);if(!t){t={id,versions:[]};plan.templates.push(t);}t.versions=t.versions.filter(old=>old.validFrom!==v.validFrom);t.versions.push(v);},'Schichtvorlage ab '+formatDate(v.validFrom)+' gespeichert. Frühere Fassungen und erfasste Tage bleiben erhalten.')){$('templateForm').hidden=true;loadRhythmFields();}
+}
+function archiveTemplate(){
+ const id=$('templateEditingId').value,date=$('templateValidFrom').value;if(!id||!ShiftPlanning.validDate(date)){planningMessage('Bitte ein Gültigkeitsdatum auswählen.',true);return;}
+ const current=ShiftPlanning.version(getPlanning(),id,date);if(!current){planningMessage('Für dieses Datum gibt es noch keine gültige Fassung.',true);return;}
+ if(commitPlanning(plan=>{const t=plan.templates.find(t=>t.id===id);t.versions=t.versions.filter(v=>v.validFrom!==date);t.versions.push({...current,validFrom:date,active:!current.active});},'Vorlage ab '+formatDate(date)+(current.active?' deaktiviert. Bestehende Pläne bleiben erhalten.':' wieder aktiviert.'))){$('templateForm').hidden=true;loadRhythmFields();}
+}
+function applyEntryWorkplace(){if(editing===null){entryWorkplaceTouched=false;renderEntryWorkplaces(data.weekWorkplaces[weekKey($('entryDate').value)]||'');}}
+function renderEntryShiftHint(){const s=$('entryDate').value;if(!ShiftPlanning.validDate(s))return;const p=plannedShiftForDate(s);$('entryShiftHint').textContent=weekKey(s).replace('-KW',' · KW ')+' · '+(weekend(s)?'Wochenende – keine automatische Schichtplanung':p.name+' · '+p.shift.replace('-','–'))+' · '+(editing?'Gespeicherte Zeiten und Schichtzuordnung bleiben erhalten.':'Vorgabe; Zeiten und Pause sind für diesen Tag frei änderbar.');}
+function applyEntryShift(){const s=$('entryDate').value;if(ShiftPlanning.validDate(s)&&editing===null){const p=plannedShiftForDate(s),[start,end]=p.shift.split('-');$('entryStart').value=start;$('entryEnd').value=end;$('entryBreak').value=p.break;$('entryBreakStart').value=p.breakStart||'';entryTimesTouched=false;}renderEntryShiftHint();}
+function savePlannedEntry(event){
+ event.preventDefault();refreshAppDate(false);const d=$('entryDate').value,type=$('entryType').value;if(!ShiftPlanning.validDate(d))return;
+ const item=type==='Arbeit'?{...draftEntry(),note:$('entryNote').value,workplace:$('entryWorkplace').value}:{type,note:$('entryNote').value};
+ const previous=data,next=JSON.parse(JSON.stringify(data)),p=JSON.parse(JSON.stringify(getPlanning()));
+ if(editing&&editing!==d){delete next.entries[editing];delete p.entryShifts[editing];}
+ next.entries[d]=item;if(type==='Arbeit'){p.entryShifts[d]=p.entryShifts[d]||plannedShiftForDate(d).shift;}else delete p.entryShifts[d];
+ next.shiftPlanning=p;
+ if(type==='Arbeit'){
+  const result=TimeEngine.calculate(next.entries,s=>ShiftPlanning.calculationShift(p,next,s))[d];
+  if(result.error){alert(result.error);return;}
+  if([item.override50,item.override100].some(v=>v!==null&&(!Number.isFinite(v)||v<0))){alert('Bitte gültige Überstundenwerte eingeben.');return;}
+ }
+ if(type==='TU')next.planned=next.planned.filter(s=>s!==d);
+ try{ShiftPlanning.validate(p,next);data=next;clearPlanningCache();save();}catch{data=previous;clearPlanningCache();render();alert('Der Tag konnte nicht gespeichert werden. Deine bisherigen Daten bleiben erhalten.');return;}
+ editing=d;$('entryInfo').hidden=false;$('entryInfo').textContent='Tag gespeichert. Du kannst ihn unten erneut bearbeiten.';renderEntryCalculation();
+}
+function initPlanning(){
+ $('shiftDate').value=monday(todayStr);$('rhythmStart').value=monday(todayStr);loadRhythmEditor();
+ document.querySelectorAll('[data-planning-tab]').forEach(button=>button.onclick=()=>{planningView=button.dataset.planningTab;renderPlanningView();});
+ $('shiftDate').onchange=loadShiftWeek;$('shiftPrev').onclick=()=>{$('shiftDate').value=addDays(monday($('shiftDate').value||todayStr),-28);loadShiftWeek();};$('shiftNext').onclick=()=>{$('shiftDate').value=addDays(monday($('shiftDate').value||todayStr),28);loadShiftWeek();};$('shiftToday').onclick=()=>{$('shiftDate').value=monday(todayStr);loadShiftWeek();};
+ $('planningWeeks').onchange=event=>{
+  const week=event.target.dataset.planWeek,workplace=event.target.dataset.planWorkplace,value=event.target.value;
+  if(week){if(value==='legacy')return;commitPlanning(plan=>{const old=plan.weeks[week];if(value==='rhythm'){if(old?.legacyDays){const days=Object.fromEntries(Object.entries(old.legacyDays).filter(([d])=>Number(d)>4));if(Object.keys(days).length)plan.weeks[week]={legacyDays:days};else delete plan.weeks[week];}else delete plan.weeks[week];}else plan.weeks[week]={...(old||{}),templateId:value};},'Schichtvorgabe nur für '+week.replace('-KW',' · KW ')+' gespeichert. Der Rhythmus bleibt unverändert.');}
+  if(workplace)commitPlanning((plan,next)=>{if(value)next.weekWorkplaces[workplace]=value;else delete next.weekWorkplaces[workplace];},'Arbeitsplatzvorgabe für diese Woche gespeichert.');
+ };
+ $('rhythmLength').onchange=()=>loadRhythmFields();$('rhythmStart').onchange=()=>loadRhythmFields([]);
+ $('rhythmForm').onsubmit=event=>{event.preventDefault();const date=$('rhythmStart').value;if(!ShiftPlanning.validDate(date))return;const start=monday(date),cycle=Array.from(document.querySelectorAll('[data-rhythm-week]')).map(el=>el.value);commitPlanning(plan=>{plan.rhythms=plan.rhythms.filter(r=>r.validFrom!==start);plan.rhythms.push({validFrom:start,cycle});},'Rhythmus ab '+formatDate(start)+' gespeichert. Frühere Wochen und erfasste Zeiten bleiben erhalten.');};
+ $('rhythmHistory').onclick=event=>{const b=event.target.closest('[data-edit-rhythm]');if(b){const r=getPlanning().rhythms.find(r=>r.validFrom===b.dataset.editRhythm);if(r)loadRhythmEditor(r);}};
+ $('planningTemplates').onclick=event=>{const b=event.target.closest('[data-edit-template]');if(b)openTemplateEditor(b.dataset.editTemplate);};
+ $('newShiftTemplate').onclick=()=>openTemplateEditor();$('cancelShiftTemplate').onclick=()=>{$('templateForm').hidden=true;};$('templateForm').onsubmit=saveTemplate;$('archiveShiftTemplate').onclick=archiveTemplate;
+ $('templateValidFrom').onchange=()=>{const id=$('templateEditingId').value,date=$('templateValidFrom').value;if(!id||!ShiftPlanning.validDate(date))return;const v=ShiftPlanning.version(getPlanning(),id,date);if(v)$('archiveShiftTemplate').textContent=v.active?'Ab Datum deaktivieren':'Ab Datum aktivieren';};
+}
+
 function hours(s,e){let [sh,sm]=s.split(':').map(Number),[eh,em]=e.split(':').map(Number);let v=(eh*60+em)-(sh*60+sm);return v<0?v+1440:v}function payoutMode(entry,category) {
  return entry['payout'+category] || (entry.payout==='pay'?'pay':'time');
 }
@@ -421,6 +571,8 @@ function deleteEntry(date) {
   delete entries[date];
   // Remove any matching vacation plan too, so a booked day cannot reappear.
   data = {...data, entries, planned:data.planned.filter(d => d !== date)};
+  if(data.shiftPlanning){data.shiftPlanning=JSON.parse(JSON.stringify(data.shiftPlanning));delete data.shiftPlanning.entryShifts[date];}
+  clearPlanningCache();
   persistAppData(JSON.stringify(data));
  } catch {
   data = previous;
@@ -445,20 +597,15 @@ function deleteEntry(date) {
  status.hidden = false;
 }
 
-function resetEntry(){refreshAppDate(false);editing=null;$('entryForm').reset();loadPayout();entryWorkplaceTouched=false;$('entryDate').value=todayStr;$('entryBreak').value=data.defaultBreak;$('entryInfo').hidden=true;toggleWork();applyEntryShift();applyEntryWorkplace();renderEntryCalculation()}function toggleWork(){const work=$('entryType').value==='Arbeit';$('workFields').hidden=!work;$('workFields').querySelectorAll('input,select').forEach(field=>field.disabled=!work);renderEntryShiftHint();renderEntryCalculation()}function editEntry(d){let e=data.entries[d];if(!e)return;editing=d;entryWorkplaceTouched=true;$('entryDate').value=d;$('entryType').value=e.type;$('entryStart').value=e.start||'06:00';$('entryEnd').value=e.end||'14:00';$('entryBreak').value=e.break??data.defaultBreak;$('entryBreakStart').value=e.breakStart||'';loadPayout(e);$('entry50').value=e.override50??'';$('entry100').value=e.override100??'';$('entryNote').value=e.note||'';toggleWork();switchTab('entry');renderEntryWorkplaces(e.workplace||'');window.scrollTo(0,0)}function init(){$('appVersion').textContent='v'+APP_VERSION;$('creatorVersion').textContent='Version v'+APP_VERSION;initReports();$('resetData').onclick=showResetDataDialog;$('cancelResetData').onclick=()=>$('resetDataDialog').close();$('confirmResetData').onclick=resetAllAppData;if(realizePastVacation())persistAppData(JSON.stringify(data));document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$('entryType').onchange=toggleWork;for(const category of [50,100])for(const mode of ['Pay','Split'])$('entry'+mode+category).onchange=()=>{const field=$('entry'+mode+category);if(field.checked)$('entry'+(mode==='Pay'?'Split':'Pay')+category).checked=false;renderEntryCalculation();};$('entryReset').onclick=resetEntry;$('entryForm').onsubmit=e=>{e.preventDefault();refreshAppDate(false);let d=$('entryDate').value,type=$('entryType').value;if(!d)return;let item=type==='Arbeit'?{type,start:$('entryStart').value,end:$('entryEnd').value,break:Number($('entryBreak').value),...($('entryBreakStart').value?{breakStart:$('entryBreakStart').value}:{}),payout50:formPayout(50),payout100:formPayout(100),override50:$('entry50').value===''?null:Number($('entry50').value),override100:$('entry100').value===''?null:Number($('entry100').value),note:$('entryNote').value,workplace:$('entryWorkplace').value}:{type,note:$('entryNote').value};if(type==='Arbeit'){let entries={...data.entries};if(editing&&editing!==d)delete entries[editing];entries[d]=item;let result=TimeEngine.calculate(entries,shiftForDate)[d];if(result.error){alert(result.error);return}if([item.override50,item.override100].some(v=>v!==null&&(!Number.isFinite(v)||v<0))){alert('Bitte gültige Überstundenwerte eingeben.');return}} if(editing&&editing!==d)delete data.entries[editing];data.entries[d]=item;if(type==='TU')data.planned=data.planned.filter(x=>x!==d);save();$('entryInfo').hidden=false;$('entryInfo').textContent='Tag gespeichert. Du kannst ihn unten erneut bearbeiten.';editing=d;renderEntryCalculation()};$('recent').onclick=entryListAction;$('entryList').onclick=entryListAction;$('monthPrev').onclick=()=>{month.setMonth(month.getMonth()-1);selected=null;renderCalendar()};$('monthNext').onclick=()=>{month.setMonth(month.getMonth()+1);selected=null;renderCalendar()};initCalendarSelection();
+function resetEntry(){refreshAppDate(false);editing=null;$('entryForm').reset();loadPayout();entryWorkplaceTouched=false;$('entryDate').value=todayStr;$('entryBreak').value=data.defaultBreak;$('entryInfo').hidden=true;toggleWork();applyEntryShift();applyEntryWorkplace();renderEntryCalculation()}function toggleWork(){const work=$('entryType').value==='Arbeit';$('workFields').hidden=!work;$('workFields').querySelectorAll('input,select').forEach(field=>field.disabled=!work);renderEntryShiftHint();renderEntryCalculation()}function editEntry(d){let e=data.entries[d];if(!e)return;editing=d;entryWorkplaceTouched=true;$('entryDate').value=d;$('entryType').value=e.type;$('entryStart').value=e.start||'06:00';$('entryEnd').value=e.end||'14:00';$('entryBreak').value=e.break??data.defaultBreak;$('entryBreakStart').value=e.breakStart||'';loadPayout(e);$('entry50').value=e.override50??'';$('entry100').value=e.override100??'';$('entryNote').value=e.note||'';toggleWork();switchTab('entry');renderEntryWorkplaces(e.workplace||'');window.scrollTo(0,0)}function init(){$('appVersion').textContent='v'+APP_VERSION;$('creatorVersion').textContent='Version v'+APP_VERSION;initReports();$('resetData').onclick=showResetDataDialog;$('cancelResetData').onclick=()=>$('resetDataDialog').close();$('confirmResetData').onclick=resetAllAppData;if(realizePastVacation())persistAppData(JSON.stringify(data));document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));$('entryType').onchange=toggleWork;for(const category of [50,100])for(const mode of ['Pay','Split'])$('entry'+mode+category).onchange=()=>{const field=$('entry'+mode+category);if(field.checked)$('entry'+(mode==='Pay'?'Split':'Pay')+category).checked=false;renderEntryCalculation();};$('entryReset').onclick=resetEntry;$('entryForm').onsubmit=savePlannedEntry;$('recent').onclick=entryListAction;$('entryList').onclick=entryListAction;$('monthPrev').onclick=()=>{month.setMonth(month.getMonth()-1);selected=null;renderCalendar()};$('monthNext').onclick=()=>{month.setMonth(month.getMonth()+1);selected=null;renderCalendar()};initCalendarSelection();
 for(let y=today.getFullYear()-3;y<=today.getFullYear()+5;y++)$('yearSelect').add(new Option(String(y),String(y)));$('yearSelect').value=String(today.getFullYear());$('yearSelect').onchange=chooseYearMonth;
 document.querySelectorAll('[data-year-measure]').forEach(b=>b.onclick=()=>{yearMeasure=b.dataset.yearMeasure;renderYear()});
 $('yearBars').onclick=e=>{let b=e.target.closest('[data-year-month]');if(b){yearMonth=Number(b.dataset.yearMonth);renderYear()}};
-$('yearEntries').onclick=entryListAction;$('saveSettings').onclick=saveAppSettings;$('addWorkplace').onclick=()=>{let s=$('newWorkplace').value.trim();if(s&&!data.workplaces.includes(s)){data.workplaces.push(s);$('newWorkplace').value='';save()}};$('workplaceList').onclick=e=>{let b=e.target.closest('button');if(!b)return;if(b.dataset.rename!==undefined){let i=Number(b.dataset.rename),v=prompt('Arbeitsplatz bearbeiten',data.workplaces[i]);if(v?.trim()){data.workplaces[i]=v.trim();save()}}if(b.dataset.deletework!==undefined){data.workplaces.splice(Number(b.dataset.deletework),1);save()}};$('shiftDate').onchange=loadShiftWeek;
-$('shiftPrev').onclick=()=>{$('shiftDate').value=addDays($('shiftDate').value,-7);loadShiftWeek()};
-$('shiftNext').onclick=()=>{$('shiftDate').value=addDays($('shiftDate').value,7);loadShiftWeek()};
-$('saveShift').onclick=()=>{let s=$('shiftDate').value;if(!s){loadShiftWeek();return}let k=weekKey(s),shift=$('shiftSelect').value;if(!validShift(shift))return;const previousWeekWorkplaces={...data.weekWorkplaces},previousShifts={...data.shifts},previousDays={...data.shiftDays};data.shifts[k]=shift;if($('shiftWorkplace').value)data.weekWorkplaces[k]=$('shiftWorkplace').value;else delete data.weekWorkplaces[k];let days={};for(let i=0;i<7;i++){let v=$('shiftDay'+i).value;if(validShift(v))days[i]=v}if(Object.keys(days).length)data.shiftDays[k]=days;else delete data.shiftDays[k];try{save();}catch{data.weekWorkplaces=previousWeekWorkplaces;data.shifts=previousShifts;data.shiftDays=previousDays;render();$('shiftInfo').textContent='Wochenplan konnte nicht gespeichert werden. Der bisherige Plan bleibt erhalten.';return;}if(editing===null&&!entryWorkplaceTouched)applyEntryWorkplace();$('shiftInfo').textContent=k.replace('-KW',' · KW ')+' gespeichert. Die Zeiterfassung übernimmt die Schichten für neue Einträge.';if(editing===null&&!entryTimesTouched){applyEntryShift();renderEntryCalculation()}};
-$('shiftList').onclick=e=>{let b=e.target.closest('[data-editshift]');if(b){$('shiftDate').value=dateForWeek(b.dataset.editshift);loadShiftWeek();$('shiftCard').scrollIntoView({block:'start',behavior:'smooth'})}};
-$('addCustomShift').onclick=()=>{let s=$('customShiftStart').value+'-'+$('customShiftEnd').value;if(!validShift(s)){$('customShiftInfo').textContent='Bitte gültige, unterschiedliche Uhrzeiten eingeben.';return}if(!standardShifts.includes(s)&&!data.customShifts.includes(s))data.customShifts.push(s);let selected=$('shiftSelect').value,days=dayNames.map((_,i)=>$('shiftDay'+i)?.value||'');$('shiftSelect').innerHTML=shiftOptions();$('shiftSelect').value=s;for(let i=0;i<7;i++){let el=$('shiftDay'+i);if(el){el.innerHTML='<option value="">Wochenschicht übernehmen</option>'+shiftOptions();el.value=days[i]}}save();$('customShiftInfo').textContent='Schicht '+s.replace('-','–')+' hinzugefügt und ausgewählt. Mit „Wochenplan speichern“ zuweisen.'};
+$('yearEntries').onclick=entryListAction;$('saveSettings').onclick=saveAppSettings;$('addWorkplace').onclick=()=>{let s=$('newWorkplace').value.trim();if(s&&!data.workplaces.includes(s)){data.workplaces.push(s);$('newWorkplace').value='';save()}};$('workplaceList').onclick=e=>{let b=e.target.closest('button');if(!b)return;if(b.dataset.rename!==undefined){let i=Number(b.dataset.rename),v=prompt('Arbeitsplatz bearbeiten',data.workplaces[i]);if(v?.trim()){data.workplaces[i]=v.trim();save()}}if(b.dataset.deletework!==undefined){data.workplaces.splice(Number(b.dataset.deletework),1);save()}};initPlanning();
 $('entryWorkplace').onchange=()=>{entryWorkplaceTouched=true;};$('entryDate').onchange=()=>{let s=$('entryDate').value;if(!s)return;if(data.entries[s]){editEntry(s);return}editing=null;$('entryInfo').hidden=true;applyEntryShift();applyEntryWorkplace();renderEntryCalculation()};
-for(let id of ['entryStart','entryEnd'])$(id).oninput=()=>{entryTimesTouched=true;renderEntryCalculation()};for(let id of ['entryBreak','entryBreakStart','entry50','entry100'])$(id).addEventListener('input',renderEntryCalculation);
-$('addCredit').onclick=()=>{let d=$('creditDate').value,n=Number($('creditDays').value);if(d&&Number.isFinite(n)&&n!==0){data.credits.push({date:d,days:n});save()}};$('creditList').onclick=e=>{let b=e.target.closest('[data-deletecredit]');if(b){data.credits.splice(Number(b.dataset.deletecredit),1);save()}};$('exportData').onclick=exportBackup;$('importData').onchange=importBackup;$('entryDate').value=todayStr;$('shiftDate').value=todayStr;$('creditDate').value=todayStr;$('planFrom').value=todayStr;$('planTo').value=todayStr;fillSettings();resetEntry();render()}// Complete backup and restore. Calculations and normal entry saving stay unchanged.
-const backupFormat = 'arbeitszeit-backup', backupVersion = 1;
+for(let id of ['entryStart','entryEnd','entryBreak','entryBreakStart'])$(id).oninput=()=>{entryTimesTouched=true;renderEntryCalculation()};for(let id of ['entry50','entry100'])$(id).addEventListener('input',renderEntryCalculation);
+$('addCredit').onclick=()=>{let d=$('creditDate').value,n=Number($('creditDays').value);if(d&&Number.isFinite(n)&&n!==0){data.credits.push({date:d,days:n});save()}};$('creditList').onclick=e=>{let b=e.target.closest('[data-deletecredit]');if(b){data.credits.splice(Number(b.dataset.deletecredit),1);save()}};$('exportData').onclick=exportBackup;$('importData').onchange=importBackup;$('entryDate').value=todayStr;$('shiftDate').value=monday(todayStr);$('creditDate').value=todayStr;$('planFrom').value=todayStr;$('planTo').value=todayStr;fillSettings();resetEntry();render()}// Complete backup and restore. Calculations and normal entry saving stay unchanged.
+const backupFormat = 'arbeitszeit-backup', backupVersion = 2;
 function backupMessage(text, kind = '') {
  const status = $('backupStatus');
  status.hidden = false;
@@ -487,7 +634,7 @@ function validateBackup(input) {
  let raw = input;
  if ('format' in input || 'version' in input || 'data' in input) {
   check(input.format === backupFormat, 'Diese Datei ist keine Sicherung dieser Arbeitszeit-App.');
-  check(input.version === backupVersion, 'Diese Sicherungsversion wird nicht unterstützt. Bitte die passende App-Version verwenden.');
+  check([1,backupVersion].includes(input.version), 'Diese Sicherungsversion wird nicht unterstützt. Bitte die passende App-Version verwenden.');
   check(typeof input.createdAt === 'string' && Number.isFinite(Date.parse(input.createdAt)), 'Das Sicherungsdatum ist ungültig.');
   raw = input.data;
  }
@@ -537,6 +684,7 @@ function validateBackup(input) {
    if (key in entry) check(typeof entry[key] === 'string', 'Eine Bemerkung oder ein Arbeitsplatz ist ungültig.');
   }
  }
+ if(restored.shiftPlanning!==undefined)ShiftPlanning.validate(restored.shiftPlanning,restored);
  return {data: restored, createdAt: raw === input ? null : input.createdAt};
 }
 function renderLastBackup() {
@@ -564,7 +712,7 @@ async function importBackup(event) {
   try { parsed = JSON.parse(await file.text()); }
   catch { throw new Error('Die Datei ist keine lesbare JSON-Sicherungsdatei.'); }
   const backup = validateBackup(parsed), restored = backup.data;
-  const days = Object.keys(restored.entries).length, weeks = new Set([...Object.keys(restored.shifts), ...Object.keys(restored.shiftDays)]).size;
+  const days = Object.keys(restored.entries).length, weeks = new Set([...Object.keys(restored.shifts), ...Object.keys(restored.shiftDays),...Object.keys(restored.shiftPlanning?.weeks||{})]).size;
   const summary = days + ' erfasste Tage, ' + restored.planned.length + ' geplante Urlaubstage, ' + weeks + ' Schichtwochen und alle Einstellungen.';
   const date = backup.createdAt ? '\nErstellt am ' + new Date(backup.createdAt).toLocaleString('de-AT') + '.' : '\nBisheriges Backup-Format.';
   if (!confirm('Sicherung wiederherstellen?\n\n' + summary + date + '\n\nAlle derzeitigen App-Daten werden durch diese Sicherung ersetzt. Möchtest du fortfahren?')) {
@@ -585,7 +733,7 @@ async function importBackup(event) {
    fillSettings();
    resetEntry();
    $('planInfo').textContent = '';
-   $('shiftInfo').textContent = 'Sicherung wiederhergestellt. ' + $('shiftInfo').textContent;
+   planningMessage('Schichtplanung aus der Sicherung wiederhergestellt.');
   } catch (error) {
    data = previous;
    if (localStorage.getItem('arbeitszeit-v3') !== previousStored) {
@@ -960,11 +1108,16 @@ function pwaMessage(text){$('pwaStatus').textContent=text;}
 function pwaDetailKey(el){return el.id?'id:'+el.id:'summary:'+(el.querySelector(':scope>summary')?.textContent.trim()||'');}
 function capturePwaDraft(){
  const fields=[...document.querySelectorAll('input[id],select[id],textarea[id]')].filter(el=>el.type!=='file').map(el=>({id:el.id,value:el.value,checked:el.checked}));
- const draft={format:1,created:Date.now(),fields,weekdays:[...document.querySelectorAll('[data-plan-weekday]')].map(el=>({value:el.value,checked:el.checked})),editing,entryTimesTouched,entryWorkplaceTouched,selected,calendarMulti,calendarSelection:[...calendarSelection],month:dateISO(month),yearMeasure,yearMonth,tab:document.querySelector('.tabs .active')?.dataset.tab||'overview',scroll:scrollY,openDetails:[...document.querySelectorAll('details')].filter(el=>el.open).map(pwaDetailKey)};
+ const draft={format:1,created:Date.now(),fields,planningView,templateEditorOpen:!$('templateForm').hidden,weekdays:[...document.querySelectorAll('[data-plan-weekday]')].map(el=>({value:el.value,checked:el.checked})),editing,entryTimesTouched,entryWorkplaceTouched,selected,calendarMulti,calendarSelection:[...calendarSelection],month:dateISO(month),yearMeasure,yearMonth,tab:document.querySelector('.tabs .active')?.dataset.tab||'overview',scroll:scrollY,openDetails:[...document.querySelectorAll('details')].filter(el=>el.open).map(pwaDetailKey)};
  sessionStorage.setItem(pwaDraftKey,JSON.stringify(draft));
 }
 function restorePwaDraft(){
  let raw;try{raw=sessionStorage.getItem(pwaDraftKey);if(!raw)return;const draft=JSON.parse(raw);if(draft.format!==1||!Array.isArray(draft.fields)||Date.now()-draft.created>86400000){sessionStorage.removeItem(pwaDraftKey);return;}
+  if(['weeks','templates','rhythm'].includes(draft.planningView)){planningView=draft.planningView;renderPlanningView();}
+  const length=draft.fields.find(f=>f.id==='rhythmLength')?.value,start=draft.fields.find(f=>f.id==='rhythmStart')?.value;
+  if(['1','2','3','4'].includes(length))$('rhythmLength').value=length;if(backupDate(start))$('rhythmStart').value=start;loadRhythmFields();
+  if(draft.templateEditorOpen)$('templateForm').hidden=false;
+  const editTemplate=draft.fields.find(f=>f.id==='templateEditingId')?.value;if(editTemplate)$('archiveShiftTemplate').hidden=false;
   const shiftDate=draft.fields.find(f=>f.id==='shiftDate')?.value;
   if(backupDate(shiftDate)){$('shiftDate').value=shiftDate;loadShiftWeek();}
   editing=draft.editing&&data.entries[draft.editing]?draft.editing:null;
@@ -1290,4 +1443,4 @@ function initRecovery() {
  });
 }
 
-function fillSettings(){for(let k of ['initialVacation','initialTime','defaultBreak','annualVacation','startDate','theme'])$(k).value=data[k];$('shiftDate').dispatchEvent(new Event('change'));$('backupFolderHint').value=data.backupFolderHint||''}init();initDateRefresh();initPwa();initRecovery()})();
+function fillSettings(){for(let k of ['initialVacation','initialTime','defaultBreak','annualVacation','startDate','theme'])$(k).value=data[k];clearPlanningCache();$('shiftDate').dispatchEvent(new Event('change'));loadRhythmEditor();$('templateForm').hidden=true;$('backupFolderHint').value=data.backupFolderHint||''}init();initDateRefresh();initPwa();initRecovery()})();
