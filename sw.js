@@ -1,16 +1,16 @@
 'use strict';
-const VERSION="1.2",BUILD="1.2-36c5055a92d295c2",ASSETS=[
+const VERSION="1.3",BUILD="1.3-7423cdb46ff3c738",ASSETS=[
   {
     "url": "./index.html",
-    "sha256": "8d44ac090899546286f4950a1471d850a35ef3da17a19bb198502702e2fb78d0"
+    "sha256": "31ae73205e5e10de9f377707e122c87d34090d2b75db4882c1cc4f1871b6b35d"
   },
   {
-    "url": "./app.js?v=30972b47353f",
-    "sha256": "30972b47353fa7319f1f303931f5033308f4ecb59379d98ef6f761556feeb8f7"
+    "url": "./app.js?v=7401e7cd7173",
+    "sha256": "7401e7cd717379e1faf59a6c784de8df7037953dfa02bc37b63879f5540856b6"
   },
   {
-    "url": "./style.css?v=1c49e1c92c94",
-    "sha256": "1c49e1c92c944f1eee445b8832f6f3363de7a3aca6cd5bc3006af83e20b7c252"
+    "url": "./style.css?v=8e766b3183d4",
+    "sha256": "8e766b3183d48a591432b4fe16f7f0de04ed2bedd1094c4288f6e5e19258792c"
   },
   {
     "url": "./manifest.webmanifest",
