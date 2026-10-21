@@ -1,12 +1,12 @@
 'use strict';
-const VERSION="1.0",BUILD="1.0-3f432e511989a6ae",ASSETS=[
+const VERSION="1.1",BUILD="1.1-ae1e5ef5846ab339",ASSETS=[
   {
     "url": "./index.html",
-    "sha256": "ec721281296b3dd7283ba2f710a04644c287fa2949e75bd1ff77e6cf54721d80"
+    "sha256": "70a7cbd8d6f706aa4a69906c5954ea8384c584d868b61404a50854ad710f94ef"
   },
   {
-    "url": "./app.js?v=7159957ecab4",
-    "sha256": "7159957ecab43ef982a27074a2e363a5688cb33c88b7ffd8ea115c2dc73e0811"
+    "url": "./app.js?v=901093e7881b",
+    "sha256": "901093e7881b72a7c39a258722ff91de6f6eab58711f46acbb86845bb96a0006"
   },
   {
     "url": "./style.css?v=2acd9553e2eb",
