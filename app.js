@@ -1,5 +1,5 @@
 
-(()=>{'use strict';const APP_VERSION='1.3';const $=id=>document.getElementById(id),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay());let today=new Date(),todayStr=dateISO(today);const defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},weekWorkplaces:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data,primaryWasPresent=false,primaryLoadFailed=false;try{const stored=localStorage.getItem('arbeitszeit-v3');primaryWasPresent=stored!==null;data={...defaultData,...JSON.parse(stored||'{}')}}catch{primaryLoadFailed=true;data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];data.weekWorkplaces=data.weekWorkplaces||{};if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';if(!primaryLoadFailed)persistAppData(JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false,entryWorkplaceTouched=false;function save(){clearPlanningCache();realizePastVacation();persistAppData(JSON.stringify(data));render()}
+(()=>{'use strict';const APP_VERSION='1.4';const $=id=>document.getElementById(id),dateISO=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,dateObj=s=>new Date(s+'T12:00:00'),addDays=(s,n)=>{let d=dateObj(s);d.setDate(d.getDate()+n);return dateISO(d)},round=n=>Math.round(n*100)/100,fmt=n=>`${Number(round(n)).toLocaleString('de-AT',{maximumFractionDigits:2})}`,formatDate=s=>dateObj(s).toLocaleDateString('de-AT'),weekend=s=>[0,6].includes(dateObj(s).getDay());let today=new Date(),todayStr=dateISO(today);const defaultData={startDate:todayStr,initialVacation:0,initialTime:0,defaultBreak:18,annualVacation:25,theme:'dark',workplaces:[],shifts:{},weekWorkplaces:{},shiftDays:{},customShifts:[],entries:{},planned:[],credits:[]};let data,primaryWasPresent=false,primaryLoadFailed=false;try{const stored=localStorage.getItem('arbeitszeit-v3');primaryWasPresent=stored!==null;data={...defaultData,...JSON.parse(stored||'{}')}}catch{primaryLoadFailed=true;data={...defaultData}};data.entries=data.entries||{};data.planned=data.planned||[];data.credits=data.credits||[];data.shifts=data.shifts||{};data.shiftDays=data.shiftDays||{};data.customShifts=Array.isArray(data.customShifts)?data.customShifts:[];data.workplaces=data.workplaces||[];data.weekWorkplaces=data.weekWorkplaces||{};if(data.designVersion!=='teal-design-2'){data.theme='dark';data.designVersion='teal-design-2';if(!primaryLoadFailed)persistAppData(JSON.stringify(data));}let selected=null,calendarSelection=new Set(),calendarMulti=false,calendarDrag=null,suppressCalendarClick=false,month=new Date(today.getFullYear(),today.getMonth(),1),editing=null,entryTimesTouched=false,entryWorkplaceTouched=false;function save(){clearPlanningCache();realizePastVacation();persistAppData(JSON.stringify(data));render()}
 // Vacation calendar: statutory Austrian holidays plus the user's free days.
 // The extra free days do not change the separate overtime premium rules.
 function vacationHolidayName(date) {
@@ -214,7 +214,78 @@ function renderCalendar() {
  renderCalendarSelection();
 }
 
-function annualDates(until){let out=[];for(let y=dateObj(data.startDate).getFullYear();y<=dateObj(until).getFullYear();y++){let d=`${y}-04-01`;if(d>data.startDate&&d<=until)out.push(d)}return out}function vacationAt(until){let n=Number(data.initialVacation)||0;if(until<data.startDate)return n;for(let d of annualDates(until))n+=Number(data.annualVacation)||0;for(let c of data.credits)if(c.date>=data.startDate&&c.date<=until)n+=Number(c.days)||0;for(let [date,e] of Object.entries(data.entries))if(date>=data.startDate&&date<=until&&e.type==='TU'&&vacationWorkday(date))n--;for(let d of data.planned)if(d>=data.startDate&&d<=until&&!data.entries[d]&&vacationWorkday(d))n--;return n}function futureApril(){let y=today.getFullYear();return todayStr<`${y}-04-01`?`${y}-04-01`:`${y+1}-04-01`}function forecastEnd(){let ds=[todayStr,futureApril(),...data.planned.filter(d=>d>=todayStr&&vacationWorkday(d)),...Object.keys(data.entries).filter(d=>d>=todayStr&&data.entries[d].type==='TU'&&vacationWorkday(d))];return ds.sort().at(-1)}function warnings(){let current=vacationAt(todayStr);if(current<0)return `⚠️ Aktuell fehlen ${fmt(-current)} Urlaubstage. Der eingetragene Urlaub bleibt gespeichert.`;let ds=[...new Set([...data.planned,...Object.keys(data.entries).filter(d=>data.entries[d].type==='TU')])].filter(d=>d>=todayStr&&vacationWorkday(d)).sort();let first=ds.find(d=>vacationAt(d)<0);return first?`⚠️ Am ${formatDate(first)} fehlen voraussichtlich ${fmt(-vacationAt(first))} Urlaubstage. Die Planung bleibt trotzdem gespeichert.`:''}function weekKey(s){let d=dateObj(s),dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow+3);let y=d.getFullYear(),jan4=new Date(y,0,4,12);let wd=(jan4.getDay()+6)%7;jan4.setDate(jan4.getDate()-wd+3);return `${y}-KW${String(1+Math.round((d-jan4)/604800000)).padStart(2,'0')}`}
+// Corrections are independent ledger entries; recorded work and starting balances stay intact.
+function correctionRows(state=data){
+ return [...state.credits.map((c,i)=>({id:'legacy-credit-'+i,date:c.date,kind:'vacation',amount:c.days,reason:'Bisherige Urlaubsgutschrift',legacy:true})),...(state.corrections||[])];
+}
+function correctionSum(kind,until,state=data){return (state.corrections||[]).reduce((n,c)=>n+(c.kind===kind&&c.date>=state.startDate&&c.date<=until?c.amount:0),0);}
+function validateCorrections(state){
+ if(state.corrections===undefined)return;
+ if(!Array.isArray(state.corrections)||state.corrections.length>10000)throw Error('Die Saldokorrekturen in der Sicherung sind ungültig.');
+ const ids=new Set();
+ for(const c of state.corrections){
+  if(!c||typeof c!=='object'||Array.isArray(c)||typeof c.id!=='string'||!/^c-[a-zA-Z0-9-]{8,90}$/.test(c.id)||ids.has(c.id)||!backupDate(c.date)||!['time','vacation'].includes(c.kind)||typeof c.amount!=='number'||!Number.isFinite(c.amount)||Math.abs(c.amount)>1000000||c.amount===0||typeof c.reason!=='string'||c.reason.length>500||typeof c.createdAt!=='string'||!/^\d{4}-\d{2}-\d{2}T/.test(c.createdAt)||!Number.isFinite(Date.parse(c.createdAt)))throw Error('Eine Saldokorrektur in der Sicherung ist ungültig.');
+  ids.add(c.id);
+ }
+ const rows=correctionRows(state),reversed=new Set();
+ for(const c of state.corrections)if(c.reverseOf!==undefined){
+  const original=rows.find(r=>r.id===c.reverseOf);
+  if(typeof c.reverseOf!=='string'||!original||original.reverseOf||original.id===c.id||original.amount===0||reversed.has(c.reverseOf)||c.kind!==original.kind||c.date<original.date||Math.abs(c.amount+original.amount)>1e-8)throw Error('Eine Gegenbuchung in der Sicherung ist ungültig.');
+  reversed.add(c.reverseOf);
+ }
+}
+function correctionMessage(text,warning=false){const el=$('correctionStatus');el.hidden=false;el.className='notice '+(warning?'warning':'success');el.textContent=text;}
+function correctionAmount(){
+ const text=$('correctionAmount').value.trim().replace(',','.');let n;
+ if($('correctionKind').value==='time'&&/^\d{1,6}:[0-5]\d$/.test(text)){const [h,m]=text.split(':').map(Number);n=h+m/60;}
+ else if(/^\d+(\.\d{1,6})?$/.test(text))n=Number(text);
+ if(!Number.isFinite(n)||n<=0||n>1000000)throw Error('Bitte einen Betrag größer als null eingeben. Stunden z. B. als 5:30 oder 5,5; Urlaubstage als Zahl.');
+ return n*($('correctionSign').value==='minus'?-1:1);
+}
+function newCorrection(date,kind,amount,reason,reverseOf){return {id:'c-'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)),date,kind,amount,reason,createdAt:new Date().toISOString(),...(reverseOf?{reverseOf}:{})};}
+function commitCorrection(create){
+ if(recoveryBusy||backupSharing)throw Error('Bitte warten, bis Sicherung oder Wiederherstellung abgeschlossen ist.');
+ const previous=data,stored=localStorage.getItem('arbeitszeit-v3');
+ // Read the latest shared record so another open tab's saved work is preserved.
+ const latest=stored?validateBackup(JSON.parse(stored)).data:JSON.parse(JSON.stringify(data));
+ const row=create(latest);if(row.date<latest.startDate)throw Error('Das Korrekturdatum darf nicht vor dem Startdatum der Salden liegen.');
+ const next={...latest,corrections:[...(latest.corrections||[]),row]};validateCorrections(next);
+ try{persistAppData(JSON.stringify(next));data=next;clearPlanningCache();render();}
+ catch(error){data=previous;try{if(localStorage.getItem('arbeitszeit-v3')!==stored){if(stored===null)localStorage.removeItem('arbeitszeit-v3');else persistAppData(stored);}}catch{}calculationCache=null;render();throw Error('Die Korrektur konnte nicht gespeichert werden. Deine bisherigen Daten bleiben erhalten.');}
+ return row;
+}
+function saveCorrection(event){
+ event.preventDefault();refreshAppDate(false);
+ try{
+  const d=$('correctionDate').value,kind=$('correctionKind').value,amount=correctionAmount(),reason=$('correctionReason').value.trim();
+  if(!backupDate(d)||!['time','vacation'].includes(kind)||reason.length>500)throw Error('Bitte Datum, Saldo und einen gültigen Grund eingeben.');
+  const row=commitCorrection(()=>newCorrection(d,kind,amount,reason));
+  $('correctionAmount').value='';$('correctionReason').value='';
+  correctionMessage('Korrektur gespeichert: '+(row.amount>0?'+':'−')+fmt(Math.abs(row.amount))+(kind==='time'?' h':' Tage')+(d>todayStr?' · vorgemerkt ab '+formatDate(d):' · Saldo aktualisiert.'));
+ }catch(error){correctionMessage(error.message,true);}
+}
+function reverseCorrection(id){
+ refreshAppDate(false);
+ try{
+  const rows=correctionRows(),original=rows.find(c=>c.id===id);if(!original||original.date<data.startDate||original.reverseOf||rows.some(c=>c.reverseOf===id))throw Error('Diese Buchung wurde bereits ausgeglichen oder liegt vor dem Startdatum der Salden.');
+  const d=original.date>todayStr?original.date:todayStr;
+  if(!confirm('Gegenbuchung erstellen?\n\n'+formatDate(d)+': '+(original.amount>0?'−':'+')+fmt(Math.abs(original.amount))+(original.kind==='time'?' h Zeittopf':' Urlaubstage')+'\n\nDie ursprüngliche Buchung bleibt in der Historie erhalten.'))return;
+  commitCorrection(latest=>{const all=correctionRows(latest),c=all.find(c=>c.id===id);if(!c||c.date<latest.startDate||c.reverseOf||all.some(r=>r.reverseOf===id))throw Error('Die Buchung wurde inzwischen geändert oder ausgeglichen.');return newCorrection(d,c.kind,-c.amount,'Gegenbuchung zu '+formatDate(c.date)+(c.reason?' · '+c.reason.slice(0,400):''),c.id);});
+  correctionMessage('Gegenbuchung gespeichert. Die ursprüngliche Buchung bleibt nachvollziehbar.');
+ }catch(error){correctionMessage(error.message,true);}
+}
+function renderCorrections(){
+ const rows=correctionRows(),reversed=new Set(rows.filter(c=>c.reverseOf).map(c=>c.reverseOf));
+ $('correctionList').innerHTML=rows.slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||'').localeCompare(a.createdAt||'')).map(c=>'<div class="correction-row"><div><strong>'+formatDate(c.date)+' · '+(c.kind==='time'?'Zeittopf':'Urlaub')+'</strong><span class="correction-value">'+(c.amount>0?'+':'−')+fmt(Math.abs(c.amount))+(c.kind==='time'?' h':' Tage')+'</span>'+(c.reason?'<p>'+escapeHtml(c.reason)+'</p>':'')+'<small>'+(c.date<data.startDate?'Vor Saldenstart · nicht berücksichtigt':c.date>todayStr?'Vorgemerkt':c.reverseOf?'Gegenbuchung':reversed.has(c.id)?'Mit Gegenbuchung ausgeglichen':c.legacy?'Übernommene Urlaubsgutschrift':'Gebucht')+'</small></div>'+(c.date>=data.startDate&&!c.reverseOf&&!reversed.has(c.id)&&c.amount!==0?'<button type="button" class="secondary" data-reverse-correction="'+escapeHtml(c.id)+'">Gegenbuchen</button>':'')+'</div>').join('')||'<p class="mini">Noch keine Korrekturen oder zusätzlichen Urlaubsgutschriften.</p>';
+}
+function initCorrections(){
+ $('correctionDate').value=todayStr;$('correctionForm').onsubmit=saveCorrection;
+ $('correctionKind').onchange=()=>{$('correctionAmountLabel').textContent=$('correctionKind').value==='time'?'Stunden (z. B. 5:30 oder 5,5)':'Urlaubstage (z. B. 1 oder 0,5)';};
+ $('correctionList').onclick=e=>{const b=e.target.closest('[data-reverse-correction]');if(b)reverseCorrection(b.dataset.reverseCorrection);};
+}
+
+function annualDates(until){let out=[];for(let y=dateObj(data.startDate).getFullYear();y<=dateObj(until).getFullYear();y++){let d=`${y}-04-01`;if(d>data.startDate&&d<=until)out.push(d)}return out}function vacationAt(until){let n=(Number(data.initialVacation)||0)+correctionSum('vacation',until);if(until<data.startDate)return n;for(let d of annualDates(until))n+=Number(data.annualVacation)||0;for(let c of data.credits)if(c.date>=data.startDate&&c.date<=until)n+=Number(c.days)||0;for(let [date,e] of Object.entries(data.entries))if(date>=data.startDate&&date<=until&&e.type==='TU'&&vacationWorkday(date))n--;for(let d of data.planned)if(d>=data.startDate&&d<=until&&!data.entries[d]&&vacationWorkday(d))n--;return n}function futureApril(){let y=today.getFullYear();return todayStr<`${y}-04-01`?`${y}-04-01`:`${y+1}-04-01`}function forecastEnd(){let ds=[todayStr,futureApril(),...(data.corrections||[]).filter(c=>c.kind==='vacation'&&c.date>=todayStr).map(c=>c.date),...data.planned.filter(d=>d>=todayStr&&vacationWorkday(d)),...Object.keys(data.entries).filter(d=>d>=todayStr&&data.entries[d].type==='TU'&&vacationWorkday(d))];return ds.sort().at(-1)}function warnings(){const current=vacationAt(todayStr);if(current<0)return '⚠️ Aktuell fehlen '+fmt(-current)+' Urlaubstage. Der eingetragene Urlaub bleibt gespeichert.';const dates=[...new Set([...data.planned.filter(vacationWorkday),...Object.keys(data.entries).filter(d=>data.entries[d].type==='TU'&&vacationWorkday(d)),...(data.corrections||[]).filter(c=>c.kind==='vacation').map(c=>c.date)])].filter(d=>d>=todayStr).sort(),first=dates.find(d=>vacationAt(d)<0);return first?'⚠️ Am '+formatDate(first)+' fehlen voraussichtlich '+fmt(-vacationAt(first))+' Urlaubstage. Die Planung bleibt trotzdem gespeichert.':'';}
+function weekKey(s){let d=dateObj(s),dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow+3);let y=d.getFullYear(),jan4=new Date(y,0,4,12);let wd=(jan4.getDay()+6)%7;jan4.setDate(jan4.getDate()-wd+3);return `${y}-KW${String(1+Math.round((d-jan4)/604800000)).padStart(2,'0')}`}
 const ShiftPlanning=(()=>{
  const standard=['05:30-13:30','06:00-14:00','13:30-21:30','14:00-22:00','18:00-02:00','21:30-05:30','22:00-06:00'];
  const names=['Früh 05:30','Früh','Nachmittag 13:30','Nachmittag','Spät','Nacht 21:30','Nacht'];
@@ -528,7 +599,7 @@ function draftEntry(){return {type:$('entryType').value,start:$('entryStart').va
 function minuteLabel(n,entryDate){let day=Math.floor(n/1440),clock=n-day*1440,date=TimeEngine.dayDate(day);return String(Math.floor(clock/60)).padStart(2,'0')+':'+String(clock%60).padStart(2,'0')+(date===entryDate?'':' ('+formatDate(date)+')')}
 function renderEntryCalculation(){let panel=$('entryCalculation'),date=$('entryDate').value;panel.hidden=$('entryType').value!=='Arbeit';if(panel.hidden)return;if(!date||!$('entryStart').value||!$('entryEnd').value){panel.textContent='Datum, Beginn und Ende eingeben.';return}let entries={...data.entries};if(editing&&editing!==date)delete entries[editing];entries[date]=draftEntry();let result=TimeEngine.calculate(entries,shiftForDate)[date];if(result.error){panel.textContent=result.error;return}panel.innerHTML='<h4 class="calculation-heading">Berechnung für diesen Tag</h4><div class="calculation-grid"><div><span class="mini">Nettoarbeitszeit</span><strong>'+fmt(result.worked)+' h</strong></div><div><span class="mini">Überstunden gesamt</span><strong>'+fmt(result.overtime)+' h</strong></div><div><span class="mini">Überstunden 50 %</span><strong>'+fmt(result.h50)+' h</strong></div><div><span class="mini">Überstunden 100 %</span><strong>'+fmt(result.h100)+' h</strong></div></div><div class="calculation-amount">'+('Zeitgutschrift inkl. Zuschlägen: <b>'+fmt(result.credit)+' h</b><br>Zur Auszahlung (Stunden ohne Zuschlagsfaktor): <b>'+fmt(result.pay50||0)+' h mit 50 % · '+fmt(result.pay100||0)+' h mit 100 %</b>')+'</div>'+(result.shortfall?'<div class="calculation-amount">Fehlende Normalarbeitszeit: <b>−'+fmt(result.shortfall)+' h aus dem Zeittopf</b></div>':'')+'<div class="mini" style="margin-top:8px">'+(result.overridden?'Manuelle Überschreibung aktiv. Automatisch: '+fmt(result.auto50)+' h mit 50 %, '+fmt(result.auto100)+' h mit 100 %.':result.shortfall?'Manuelle Überstundenwerte werden unter 7 h 42 min nicht gebucht.':'Automatisch nach deinen Regeln berechnet.')+'</div><details style="margin-top:10px"><summary style="min-height:44px;padding:10px 0;cursor:pointer">Zeitabschnitte &amp; Zuschläge</summary>'+result.segments.map(s=>'<div class="calculation-segment"><b>'+minuteLabel(s.start,date)+'–'+minuteLabel(s.end,date)+' · '+fmt((s.end-s.start)/60)+' h'+(s.rate?' · '+s.rate+' %':'')+'</b><span>'+escapeHtml(s.reason)+'</span></div>').join('')+'</details>'}
 function calc(e,date){return workDetails(e,date).balance}// Overview is view state only; changing a month never changes recorded data.
-let overviewMonth=new Date(today.getFullYear(),today.getMonth(),1),overviewSelected=todayStr;
+let overviewMonth=new Date(today.getFullYear(),today.getMonth(),1),overviewSelected=todayStr,overviewMode='month',overviewWeek=monday(todayStr);
 function overviewBooking(result){
  if(!result||result.error||!(result.overtime>1e-8))return null;
  const pay=(result.pay50||0)+(result.pay100||0)>1e-8,time=result.credit>1e-8;
@@ -546,7 +617,7 @@ function renderOverviewCalendar(){
  for(let day=1;day<=count;day++){
   const date=dateISO(new Date(year,m,day)),info=overviewDay(date),result=info.entry?.type==='Arbeit'?workDetails(info.entry,date):null,booking=overviewBooking(result);
   const label=formatDate(date)+', '+(info.planned?'Urlaub geplant':info.holiday||info.label)+(booking?', '+booking.label:'')+(result?.error?', Berechnung prüfen':'');
-  html+='<button type="button" class="ov-day ov-'+info.kind+(date===todayStr?' ov-today':'')+'" data-overview-date="'+date+'" aria-label="'+escapeHtml(label)+'" aria-pressed="'+(date===overviewSelected)+'"'+(date===todayStr?' aria-current="date"':'')+'><strong>'+day+'</strong><span>'+escapeHtml(info.label==='Arbeit'?'A':info.label)+'</span><small class="ov-booking '+(booking?'ov-booking-'+booking.kind:'')+'">'+(result?.error?'!':booking?.code||'')+'</small></button>';
+  html+='<button type="button" class="ov-day ov-'+info.kind+(date===todayStr?' ov-today':'')+(overviewMode==='week'&&date>=overviewWeek&&date<=addDays(overviewWeek,6)?' ov-in-week':'')+'" data-overview-date="'+date+'" aria-label="'+escapeHtml(label)+'" aria-pressed="'+(date===overviewSelected)+'"'+(date===todayStr?' aria-current="date"':'')+'><strong>'+day+'</strong><span>'+escapeHtml(info.label==='Arbeit'?'A':info.label)+'</span><small class="ov-booking '+(booking?'ov-booking-'+booking.kind:'')+'">'+(result?.error?'!':booking?.code||'')+'</small></button>';
  }
  $('overviewCalendar').innerHTML=html;renderOverviewDetails();
 }
@@ -555,7 +626,7 @@ function renderOverviewDetails(){
  const date=overviewSelected,info=overviewDay(date),e=info.entry;
  let html='<h3>'+formatDate(date)+'</h3><p>'+escapeHtml(info.planned?'Urlaub geplant · noch nicht gebucht':info.holiday||(info.label==='–'?'Kein Eintrag':info.label))+'</p>';
  if(e){
-  if(date>todayStr)html+='<p class="mini">Gespeicherter Tag in der Zukunft · noch nicht in den Monatssummen enthalten.</p>';
+  if(date>todayStr)html+='<p class="mini">Gespeicherter Tag in der Zukunft · noch nicht in den Zeitraum-Summen enthalten.</p>';
   if(e.workplace)html+='<p>Arbeitsplatz: '+escapeHtml(e.workplace)+'</p>';
   if(e.type==='Arbeit'){
    const r=workDetails(e,date);html+='<p>'+escapeHtml(e.start)+'–'+escapeHtml(e.end)+' · '+fmt(Number(e.break)||0)+' min Pause'+(e.breakStart?' ab '+escapeHtml(e.breakStart):'')+'</p>';
@@ -571,23 +642,58 @@ function renderOverviewDetails(){
  }else html+='<p class="mini">'+(info.planned?'Diese Planung erzeugt keine Zeitgutschrift.':'Kein Tag erfasst.')+'</p><button type="button" class="secondary" data-overview-new="'+date+'">Tag erfassen</button>';
  $('overviewDayDetails').innerHTML=html;
 }
+function overviewRange(){if(overviewMode==='week')return {from:overviewWeek,to:addDays(overviewWeek,6)};return {from:dateISO(overviewMonth),to:dateISO(new Date(overviewMonth.getFullYear(),overviewMonth.getMonth()+1,0))};}
+function alignOverviewCalendar(){if(overviewMode==='week'){const middle=dateObj(addDays(overviewWeek,3));overviewMonth=new Date(middle.getFullYear(),middle.getMonth(),1);}}
 function changeOverviewMonth(delta){
- const next=new Date(overviewMonth.getFullYear(),overviewMonth.getMonth()+delta,1);if(next.getFullYear()<1900||next.getFullYear()>9999)return;
- overviewMonth=next;overviewSelected=null;renderMonthlySummary();renderOverviewCalendar();
+ if(overviewMode==='week'){
+  const next=addDays(overviewWeek,delta*7);if(next<'1900-01-01'||next>'9999-12-25')return;overviewWeek=next;alignOverviewCalendar();
+ }else{const next=new Date(overviewMonth.getFullYear(),overviewMonth.getMonth()+delta,1);if(next.getFullYear()<1900||next.getFullYear()>9999)return;overviewMonth=next;}
+ overviewSelected=null;renderMonthlySummary();renderOverviewCalendar();
 }
+function setOverviewMode(mode){if(overviewMode===mode)return;overviewMode=mode;alignOverviewCalendar();overviewSelected=null;renderMonthlySummary();renderOverviewCalendar();}
+function currentOverviewPeriod(){overviewMonth=new Date(today.getFullYear(),today.getMonth(),1);overviewWeek=monday(todayStr);overviewSelected=todayStr;alignOverviewCalendar();renderMonthlySummary();renderOverviewCalendar();}
 function initOverview(){
- let start=null,suppressUntil=0;const area=$('overviewMonths');
- area.addEventListener('pointerdown',e=>{if(e.isPrimary&&e.button===0)start={x:e.clientX,y:e.clientY,id:e.pointerId};});
+ let start=null,suppressUntil=0;const area=$('overviewMonths'),header=$('overviewPeriodHead');
+ area.addEventListener('pointerdown',e=>{if(e.isPrimary&&e.button===0)start={x:e.clientX,y:e.clientY,id:e.pointerId,vertical:header.contains(e.target)};});
+ area.addEventListener('pointermove',e=>{if(start?.vertical&&e.pointerId===start.id&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>10)header.setPointerCapture(e.pointerId);});
  area.addEventListener('pointercancel',()=>start=null);
- area.addEventListener('pointerup',e=>{if(!start||e.pointerId!==start.id)return;const dx=e.clientX-start.x,dy=e.clientY-start.y;start=null;if(Math.abs(dx)>=55&&Math.abs(dx)>Math.abs(dy)*1.3){suppressUntil=Date.now()+400;changeOverviewMonth(dx<0?1:-1);}});
+ area.addEventListener('pointerup',e=>{if(!start||e.pointerId!==start.id)return;const dx=e.clientX-start.x,dy=e.clientY-start.y,vertical=start.vertical;start=null;if(Math.abs(dx)>=55&&Math.abs(dx)>Math.abs(dy)*1.3){suppressUntil=Date.now()+400;changeOverviewMonth(dx<0?1:-1);}else if(vertical&&Math.abs(dy)>=40&&Math.abs(dy)>Math.abs(dx)*1.3){suppressUntil=Date.now()+400;setOverviewMode(dy<0?'week':'month');}});
  area.addEventListener('click',e=>{if(Date.now()<suppressUntil){e.preventDefault();e.stopImmediatePropagation();}},true);
- area.addEventListener('keydown',e=>{if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&!['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();changeOverviewMonth(e.key==='ArrowRight'?1:-1);}});
+ area.addEventListener('keydown',e=>{if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();if(e.key==='ArrowUp'||e.key==='ArrowDown')setOverviewMode(e.key==='ArrowUp'?'week':'month');else changeOverviewMonth(e.key==='ArrowRight'?1:-1);}});
+ let wheelUntil=0;header.addEventListener('wheel',e=>{e.preventDefault();if(Date.now()<wheelUntil||Math.abs(e.deltaY)<4)return;wheelUntil=Date.now()+650;setOverviewMode(e.deltaY>0?'week':'month');},{passive:false});
+ $('overviewModeToggle').onclick=()=>setOverviewMode(overviewMode==='month'?'week':'month');$('overviewCurrent').onclick=currentOverviewPeriod;
  $('overviewCalendar').onclick=e=>{const button=e.target.closest('[data-overview-date]');if(button){overviewSelected=button.dataset.overviewDate;renderOverviewCalendar();}};
  $('overviewDayDetails').onclick=e=>{const button=e.target.closest('[data-overview-new]');if(button){resetEntry();$('entryDate').value=button.dataset.overviewNew;$('entryDate').dispatchEvent(new Event('change'));switchTab('entry');window.scrollTo(0,0);}else entryListAction(e);};
 }
+function monthlySummary(){
+ const range=overviewRange(),totals={pay50:0,pay100:0,credit:0,worked:0,overtime:0,errors:0};
+ for(const [d,e]of Object.entries(data.entries)){if(d<range.from||d>range.to||d>todayStr||e.type!=='Arbeit')continue;const r=workDetails(e,d);if(r.error){totals.errors++;continue;}for(const key of ['worked','overtime','pay50','pay100','credit'])totals[key]+=r[key]||0;}
+ return totals;
+}
+function renderMonthlySummary(){
+ const totals=monthlySummary(),week=overviewMode==='week',range=overviewRange();
+ $('summaryMonth').textContent=week?weekKey(overviewWeek).replace('-KW',' · KW '):overviewMonth.toLocaleDateString('de-AT',{month:'long',year:'numeric'});
+ $('overviewPeriodRange').textContent=week?formatDate(range.from)+'–'+formatDate(range.to):'Monatsübersicht';
+ $('overviewModeToggle').textContent=week?'Woche ↕ Monat':'Monat ↕ Woche';$('overviewModeToggle').setAttribute('aria-pressed',String(week));
+ $('overviewCurrent').textContent=week?'Diese Woche':'Dieser Monat';
+ for(const [id,key]of Object.entries({monthPay100:'pay100',monthPay50:'pay50',monthTimeCredit:'credit',monthWorked:'worked',monthOvertime:'overtime'}))$(id).textContent=fmt(totals[key])+' h';
+ $('overviewWeekInfo').hidden=!week;
+ $('overviewWeekInfo').textContent=(totals.worked<50?'Noch '+fmt(50-totals.worked)+' h bis 50 Wochenstunden.':fmt(totals.worked-50)+' h über 50 Wochenstunden.')+' Nettoarbeitszeit bis heute · Zuordnung nach Schichtbeginn.'+(totals.errors?' '+totals.errors+' fehlerhafte Einträge nicht enthalten.':'');
+ $('overviewCalendarTitle').textContent=week?overviewMonth.toLocaleDateString('de-AT',{month:'long',year:'numeric'})+' · Woche markiert':'Dein Monat';
+}
+function workedSpecialDays(year){
+ const result={saturday:0,sunday:0,holiday:0};
+ for(const [d,e]of Object.entries(data.entries)){
+  if(!d.startsWith(year+'-')||d>todayStr||e.type!=='Arbeit')continue;
+  const r=workDetails(e,d);if(r.error||!(r.worked>0))continue;
+  const day=dateObj(d).getDay();if(day===6)result.saturday++;if(day===0)result.sunday++;
+  if(TimeEngine.holidayName(d))result.holiday++;
+ }
+ return result;
+}
 
-function monthlySummary(){let totals={pay50:0,pay100:0,credit:0,worked:0,overtime:0};for(let [d,e] of Object.entries(data.entries)){if(!d.startsWith(dateISO(overviewMonth).slice(0,7))||d>todayStr||e.type!=='Arbeit')continue;let detail=workDetails(e,d);totals.worked+=detail.worked;totals.overtime+=detail.overtime;totals.pay50+=detail.pay50||0;totals.pay100+=detail.pay100||0;totals.credit+=detail.credit;}return totals}function renderMonthlySummary(){let totals=monthlySummary();$('summaryMonth').textContent=overviewMonth.toLocaleDateString('de-AT',{month:'long',year:'numeric'});for(let [id,key] of Object.entries({monthPay100:'pay100',monthPay50:'pay50',monthTimeCredit:'credit',monthWorked:'worked',monthOvertime:'overtime'}))$(id).textContent=fmt(totals[key])+' h';}function timeBalance(){let n=Number(data.initialTime)||0;for(let [d,e] of Object.entries(data.entries))if(d>=data.startDate&&d<=todayStr)n+=calc(e,d);return round(n)}function closeSettingsPanels(){document.querySelectorAll('#settings>details.settings-panel').forEach(panel=>panel.open=false);}
-function switchTab(id){if(id==='overview'){overviewMonth=new Date(today.getFullYear(),today.getMonth(),1);overviewSelected=todayStr;}if(id!=='settings')closeSettingsPanels();document.querySelectorAll('main section').forEach(s=>s.hidden=s.id!==id);document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));$('heading').textContent={overview:'Übersicht',entry:'Zeiterfassung',vacation:'Urlaubsplanung',year:'Jahresübersicht',settings:'Einstellungen'}[id];render()}function render(){refreshAppDate(false);calculationCache=null;document.body.classList.toggle('dark',data.theme==='dark');document.documentElement.style.colorScheme=data.theme==='dark'?'dark':'light';document.querySelector('meta[name="theme-color"]').content=data.theme==='dark'?'#0b1728':'#f3f6fa';renderLastBackup();renderMonthlySummary();$('today').textContent=today.toLocaleDateString('de-AT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});$('balance').textContent=fmt(timeBalance())+' h';$('vacCurrent').textContent=fmt(vacationAt(todayStr))+' Tage';$('vacApril').textContent=`Am ${formatDate(futureApril())}: ${fmt(vacationAt(futureApril()))} Tage`;$('vacAfter').textContent=`Nach allen Planungen: ${fmt(vacationAt(forecastEnd()))} Tage`;$('overviewWarning').innerHTML=(warnings()?`<div class="notice warning">${warnings()}</div>`:'')+Object.entries(calculationCache||{}).filter(([,r])=>r.error).map(([d,r])=>'<div class="notice warning">'+formatDate(d)+': '+escapeHtml(r.error)+' Dieser Eintrag wird bis zur Korrektur nicht berechnet.</div>').join('');let entries=Object.entries(data.entries).sort((a,b)=>b[0].localeCompare(a[0]));renderOverviewCalendar();$('entryList').innerHTML=entries.slice(0,50).map(([d,e])=>`<div class="item"><span class="entry-list-text">${formatDate(d)} · ${escapeHtml(e.type)}<br><small>${e.type==='Arbeit'?e.start+'–'+e.end+' · '+e.break+' min Pause':''}</small></span><div class="entry-actions"><button type="button" class="secondary" data-edit="${d}">Bearbeiten</button>${entryDeleteButton(d)}</div></div>`).join('')||'<p class="muted">Keine Einträge.</p>';renderEntryWorkplaces();renderCalendar();$('planCurrent').textContent=fmt(vacationAt(todayStr))+' Tage';$('planApril').textContent=fmt(vacationAt(futureApril()))+' Tage';$('aprilLabel').textContent='Am '+formatDate(futureApril());$('planAfter').textContent=fmt(vacationAt(forecastEnd()))+' Tage';$('vacWarnings').innerHTML=warnings()?`<div class="notice warning">${warnings()}</div>`:'<div class="notice success">✓ Für die derzeit geplanten Urlaubstage ist ausreichend Urlaub verfügbar.</div>';renderYear();renderWorkplaces();renderCredits();renderShiftList();renderEntryShiftHint();renderEntryCalculation()}function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}let yearMeasure='worked',yearMonth=today.getMonth();
+function timeBalance(){let n=(Number(data.initialTime)||0)+correctionSum('time',todayStr);for(let [d,e] of Object.entries(data.entries))if(d>=data.startDate&&d<=todayStr)n+=calc(e,d);return round(n)}function closeSettingsPanels(){document.querySelectorAll('#settings>details.settings-panel').forEach(panel=>panel.open=false);}
+function switchTab(id){if(id==='overview'){overviewMode='month';overviewWeek=monday(todayStr);overviewMonth=new Date(today.getFullYear(),today.getMonth(),1);overviewSelected=todayStr;}if(id!=='settings')closeSettingsPanels();document.querySelectorAll('main section').forEach(s=>s.hidden=s.id!==id);document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));$('heading').textContent={overview:'Übersicht',entry:'Zeiterfassung',vacation:'Urlaubsplanung',year:'Jahresübersicht',settings:'Einstellungen'}[id];render()}function render(){refreshAppDate(false);calculationCache=null;document.body.classList.toggle('dark',data.theme==='dark');document.documentElement.style.colorScheme=data.theme==='dark'?'dark':'light';document.querySelector('meta[name="theme-color"]').content=data.theme==='dark'?'#0b1728':'#f3f6fa';renderLastBackup();renderMonthlySummary();$('today').textContent=today.toLocaleDateString('de-AT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});$('balance').textContent=fmt(timeBalance())+' h';$('vacCurrent').textContent=fmt(vacationAt(todayStr))+' Tage';$('vacApril').textContent=`Am ${formatDate(futureApril())}: ${fmt(vacationAt(futureApril()))} Tage`;$('vacAfter').textContent=`Nach allen Planungen: ${fmt(vacationAt(forecastEnd()))} Tage`;$('overviewWarning').innerHTML=(warnings()?`<div class="notice warning">${warnings()}</div>`:'')+Object.entries(calculationCache||{}).filter(([,r])=>r.error).map(([d,r])=>'<div class="notice warning">'+formatDate(d)+': '+escapeHtml(r.error)+' Dieser Eintrag wird bis zur Korrektur nicht berechnet.</div>').join('');let entries=Object.entries(data.entries).sort((a,b)=>b[0].localeCompare(a[0]));renderOverviewCalendar();$('entryList').innerHTML=entries.slice(0,50).map(([d,e])=>`<div class="item"><span class="entry-list-text">${formatDate(d)} · ${escapeHtml(e.type)}<br><small>${e.type==='Arbeit'?e.start+'–'+e.end+' · '+e.break+' min Pause':''}</small></span><div class="entry-actions"><button type="button" class="secondary" data-edit="${d}">Bearbeiten</button>${entryDeleteButton(d)}</div></div>`).join('')||'<p class="muted">Keine Einträge.</p>';renderEntryWorkplaces();renderCalendar();$('planCurrent').textContent=fmt(vacationAt(todayStr))+' Tage';$('planApril').textContent=fmt(vacationAt(futureApril()))+' Tage';$('aprilLabel').textContent='Am '+formatDate(futureApril());$('planAfter').textContent=fmt(vacationAt(forecastEnd()))+' Tage';$('vacWarnings').innerHTML=warnings()?`<div class="notice warning">${warnings()}</div>`:'<div class="notice success">✓ Für die derzeit geplanten Urlaubstage ist ausreichend Urlaub verfügbar.</div>';renderYear();renderWorkplaces();renderCorrections();renderShiftList();renderEntryShiftHint();renderEntryCalculation()}function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}let yearMeasure='worked',yearMonth=today.getMonth();
 const yearMonthNames=['Jänner','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 function yearEntriesFor(y){return Object.entries(data.entries).filter(([d])=>d.startsWith(y+'-')).sort((a,b)=>b[0].localeCompare(a[0]))}
 function yearMonthTotals(entries){let months=Array.from({length:12},()=>({worked:0,overtime:0,days:0,work:0,vacation:0,za:0,sick:0,accident:0}));for(let [d,e] of entries){let m=Number(d.slice(5,7))-1;if(m<0||m>11)continue;let value=months[m],detail=workDetails(e,d);value.days++;value.worked+=detail.worked;value.overtime+=detail.overtime;if(e.type==='Arbeit')value.work++;if(e.type==='TU'&&vacationWorkday(d))value.vacation++;if(e.type==='ZA')value.za++;if(e.type==='KK')value.sick++;if(e.type==='KU')value.accident++;}return months}
@@ -597,7 +703,8 @@ let y=$('yearSelect').value||String(today.getFullYear());
 for(let savedYear of [...new Set(Object.keys(data.entries).map(d=>d.slice(0,4)))].filter(y=>/^\d{4}$/.test(y))){if(!Array.from($('yearSelect').options).some(o=>o.value===savedYear))$('yearSelect').add(new Option(savedYear,savedYear));}
 let entries=yearEntriesFor(y),months=yearMonthTotals(entries),sum=key=>months.reduce((n,m)=>n+m[key],0);
 $('yearTotalLabel').textContent='Arbeitsstunden · '+y;$('yearTotalWorked').textContent=fmt(sum('worked'))+' h';$('yearTotalOvertime').textContent=fmt(sum('overtime'))+' h Überstunden im Jahr';
-$('yearStats').innerHTML=[['Arbeitstage','work'],['Urlaubstage','vacation'],['Zeitausgleich','za'],['KK · Krankenstand','sick'],['KU · Arbeitsunfall','accident']].map(([label,key])=>'<div class="year-stat"><strong>'+sum(key)+'</strong><span>'+label+'</span></div>').join('');
+const special=workedSpecialDays(y);
+$('yearStats').innerHTML=[['Arbeitstage','work'],['Urlaubstage','vacation'],['Zeitausgleich','za'],['KK · Krankenstand','sick'],['KU · Arbeitsunfall','accident'],['Gearbeitete Samstage','saturday'],['Gearbeitete Sonntage','sunday'],['Gearbeitete Feiertage','holiday']].map(([label,key])=>'<div class="year-stat"><strong>'+(key in special?special[key]:sum(key))+'</strong><span>'+label+'</span></div>').join('');
 for(let b of document.querySelectorAll('[data-year-measure]'))b.setAttribute('aria-pressed',String(b.dataset.yearMeasure===yearMeasure));
 let peak=Math.max(0,...months.map(m=>m[yearMeasure])),step=peak>100?20:peak>20?10:peak>5?5:1,max=Math.max(step,Math.ceil(peak/step)*step);
 $('yearBars').innerHTML=months.map((m,i)=>'<button type="button" class="year-bar-row '+(m.days?'':'no-entries')+'" data-year-month="'+i+'" aria-pressed="'+(i===yearMonth)+'" aria-label="'+yearMonthNames[i]+' '+y+': '+(m.days?fmt(m[yearMeasure])+' Stunden '+(yearMeasure==='worked'?'Arbeitszeit':'Überstunden'):'keine Einträge')+'"><span class="year-bar-month">'+yearMonthNames[i].slice(0,3)+'</span><span class="year-bar-track" aria-hidden="true"><span class="year-bar-fill" style="width:'+Math.max(0,Math.min(100,m[yearMeasure]/max*100))+'%"></span></span><span class="year-bar-value">'+(m.days?fmt(m[yearMeasure])+' h':'—')+'</span></button>').join('');
@@ -607,7 +714,8 @@ $('yearEntriesHeading').textContent=yearMonthNames[yearMonth]+' · erfasst';$('y
 const names={Arbeit:'Arbeit',TU:'Urlaub',ZA:'Zeitausgleich',KK:'KK – Krankenstand',KU:'KU – Krankstand/Arbeitsunfall',Feiertag:'Feiertag',Frei:'Frei'};
 $('yearEntries').innerHTML=monthEntries.map(([d,e])=>{let value=workDetails(e,d);return '<div class="recorded-entry-row"><button type="button" class="year-entry" data-edit="'+d+'" aria-label="'+formatDate(d)+' bearbeiten"><span><b>'+formatDate(d)+' · '+escapeHtml(names[e.type]||e.type)+'</b><small>'+(e.type==='Arbeit'?escapeHtml(e.start)+'–'+escapeHtml(e.end)+' · '+fmt(value.worked)+' h Arbeitszeit<br>'+fmt(value.overtime)+' h Überstunden':'')+'</small></span><span class="year-entry-arrow" aria-hidden="true">›</span></button>'+entryDeleteButton(d)+'</div>'}).join('')||'<p class="muted">Noch keine Tage erfasst.</p>';
 }
-function renderWorkplaces(){$('workplaceList').innerHTML=data.workplaces.map((w,i)=>`<div class="item"><span>${escapeHtml(w)}</span><button class="secondary" data-rename="${i}">Bearbeiten</button><button class="danger" data-deletework="${i}">Löschen</button></div>`).join('')}function renderCredits(){$('creditList').innerHTML=data.credits.map((c,i)=>`<div class="item"><span>${formatDate(c.date)}: ${fmt(c.days)} Tage</span><button class="danger" data-deletecredit="${i}">Löschen</button></div>`).join('')}function entryDeleteButton(date) {
+function renderWorkplaces(){$('workplaceList').innerHTML=data.workplaces.map((w,i)=>`<div class="item"><span>${escapeHtml(w)}</span><button class="secondary" data-rename="${i}">Bearbeiten</button><button class="danger" data-deletework="${i}">Löschen</button></div>`).join('')}
+function entryDeleteButton(date) {
  const label = 'Tag ' + formatDate(date) + ' löschen';
  return '<button type="button" class="danger entry-delete" data-delete-entry="' + date + '" aria-label="' + label + '" title="' + label + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg></button>';
 }
@@ -663,8 +771,8 @@ $('yearBars').onclick=e=>{let b=e.target.closest('[data-year-month]');if(b){year
 $('yearEntries').onclick=entryListAction;$('saveSettings').onclick=saveAppSettings;$('addWorkplace').onclick=()=>{let s=$('newWorkplace').value.trim();if(s&&!data.workplaces.includes(s)){data.workplaces.push(s);$('newWorkplace').value='';save()}};$('workplaceList').onclick=e=>{let b=e.target.closest('button');if(!b)return;if(b.dataset.rename!==undefined){let i=Number(b.dataset.rename),v=prompt('Arbeitsplatz bearbeiten',data.workplaces[i]);if(v?.trim()){data.workplaces[i]=v.trim();save()}}if(b.dataset.deletework!==undefined){data.workplaces.splice(Number(b.dataset.deletework),1);save()}};initPlanning();
 $('entryWorkplace').onchange=()=>{entryWorkplaceTouched=true;};$('entryDate').onchange=()=>{let s=$('entryDate').value;if(!s)return;if(data.entries[s]){editEntry(s);return}editing=null;$('entryInfo').hidden=true;applyEntryShift();applyEntryWorkplace();renderEntryCalculation()};
 for(let id of ['entryStart','entryEnd','entryBreak','entryBreakStart'])$(id).oninput=()=>{entryTimesTouched=true;renderEntryCalculation()};for(let id of ['entry50','entry100'])$(id).addEventListener('input',renderEntryCalculation);
-$('addCredit').onclick=()=>{let d=$('creditDate').value,n=Number($('creditDays').value);if(d&&Number.isFinite(n)&&n!==0){data.credits.push({date:d,days:n});save()}};$('creditList').onclick=e=>{let b=e.target.closest('[data-deletecredit]');if(b){data.credits.splice(Number(b.dataset.deletecredit),1);save()}};$('exportData').onclick=exportBackup;$('importData').onchange=importBackup;$('entryDate').value=todayStr;$('shiftDate').value=monday(todayStr);$('creditDate').value=todayStr;$('planFrom').value=todayStr;$('planTo').value=todayStr;fillSettings();resetEntry();render()}// Complete backup and restore. Calculations and normal entry saving stay unchanged.
-const backupFormat = 'arbeitszeit-backup', backupVersion = 2;
+initCorrections();$('exportData').onclick=exportBackup;$('importData').onchange=importBackup;$('entryDate').value=todayStr;$('shiftDate').value=monday(todayStr);$('planFrom').value=todayStr;$('planTo').value=todayStr;fillSettings();resetEntry();render()}// Complete backup and restore. Calculations and normal entry saving stay unchanged.
+const backupFormat = 'arbeitszeit-backup', backupVersion = 3;
 function backupMessage(text, kind = '') {
  const status = $('backupStatus');
  status.hidden = false;
@@ -693,7 +801,7 @@ function validateBackup(input) {
  let raw = input;
  if ('format' in input || 'version' in input || 'data' in input) {
   check(input.format === backupFormat, 'Diese Datei ist keine Sicherung dieser Arbeitszeit-App.');
-  check([1,backupVersion].includes(input.version), 'Diese Sicherungsversion wird nicht unterstützt. Bitte die passende App-Version verwenden.');
+  check([1,2,backupVersion].includes(input.version), 'Diese Sicherungsversion wird nicht unterstützt. Bitte die passende App-Version verwenden.');
   check(typeof input.createdAt === 'string' && Number.isFinite(Date.parse(input.createdAt)), 'Das Sicherungsdatum ist ungültig.');
   raw = input.data;
  }
@@ -743,6 +851,8 @@ function validateBackup(input) {
    if (key in entry) check(typeof entry[key] === 'string', 'Eine Bemerkung oder ein Arbeitsplatz ist ungültig.');
   }
  }
+ validateCorrections(restored);
+ if(raw!==input&&input.version<3&&(restored.corrections||[]).length)throw Error('Sicherungen mit Saldokorrekturen benötigen Formatversion 3.');
  if(restored.shiftPlanning!==undefined)ShiftPlanning.validate(restored.shiftPlanning,restored);
  return {data: restored, createdAt: raw === input ? null : input.createdAt};
 }
@@ -872,7 +982,7 @@ function reportRange() {
  } else if(kind==='range') {
   from=$('reportFrom').value; to=$('reportTo').value; label='Freier Zeitraum';
  } else {
-  const dates=[todayStr,data.startDate,...Object.keys(data.entries),...data.planned,...data.credits.map(c=>c.date)].filter(backupDate).sort();
+  const dates=[todayStr,data.startDate,...Object.keys(data.entries),...data.planned,...data.credits.map(c=>c.date),...(data.corrections||[]).map(c=>c.date)].filter(backupDate).sort();
   from=dates[0]; to=dates.at(-1); label='Alle gespeicherten Daten';
  }
  if(!backupDate(from)||!backupDate(to)||to<from) throw new Error('Bitte einen gültigen Zeitraum wählen: Von darf nicht nach Bis liegen.');
@@ -892,32 +1002,33 @@ function reportMessage(text,warning=false) {
 }
 function reportTimeAt(until,results) {
  const cutoff=until<todayStr?until:todayStr;
- let balance=Number(data.initialTime)||0;
+ let balance=(Number(data.initialTime)||0)+correctionSum('time',cutoff);
  for(const [date,value] of Object.entries(results)) if(date>=data.startDate&&date<=cutoff) balance+=value.balance||0;
  return round(balance);
 }
 function buildReport() {
  refreshAppDate(false);
  const range=reportRange(),results=TimeEngine.calculate(data.entries,shiftForDate);
- const dates=new Set([...Object.keys(data.entries),...data.planned,...data.credits.map(c=>c.date)]);
+ const dates=new Set([...Object.keys(data.entries),...data.planned,...data.credits.map(c=>c.date),...(data.corrections||[]).map(c=>c.date)]);
  const annual=new Set(Number(data.annualVacation)?annualDates(range.to):[]);
  for(const date of annual) dates.add(date);
  const names={Arbeit:'Arbeit',TU:'Urlaub',ZA:'Zeitausgleich',KK:'KK – Krankenstand',KU:'KU – Krankstand/Arbeitsunfall',Feiertag:'Feiertag',Frei:'Frei'};
  const rows=[...dates].filter(date=>date>=range.from&&date<=range.to).sort().map(date=>{
   const entry=data.entries[date],detail=results[date]||{},planned=!entry&&data.planned.includes(date);
-  const credits=data.credits.filter(c=>c.date===date).reduce((sum,c)=>sum+Number(c.days),0)+(annual.has(date)?Number(data.annualVacation)||0:0);
+  const corrections=(data.corrections||[]).filter(c=>c.date===date),timeCorrection=corrections.filter(c=>c.kind==='time').reduce((n,c)=>n+c.amount,0);
+  const credits=data.credits.filter(c=>c.date===date).reduce((sum,c)=>sum+Number(c.days),0)+(annual.has(date)?Number(data.annualVacation)||0:0)+corrections.filter(c=>c.kind==='vacation').reduce((n,c)=>n+c.amount,0);
   const work=entry?.type==='Arbeit',eligible=vacationWorkday(date);
-  const status=entry?(date>todayStr?'Erfasst (zukünftig)':'Erfasst'):planned?'Geplant':'Gutschrift';
-  const notes=[entry?.note||''];
+  const status=entry?(date>todayStr?'Erfasst (zukünftig)':'Erfasst'):planned?'Geplant':corrections.length?(date>todayStr?'Vorgemerkt':'Gebucht'):'Gutschrift';
+  const notes=[entry?.note||'',...corrections.map(c=>(c.reverseOf?'Gegenbuchung':'Saldokorrektur')+' '+(c.kind==='time'?'Zeittopf':'Urlaub')+': '+(c.amount>0?'+':'')+fmt(c.amount)+(c.kind==='time'?' h':' Tage')+(c.reason?' · '+c.reason:''))];
   if(credits&&entry) notes.push('Urlaubsgutschrift: '+fmt(credits)+' Tage');
   if(detail.error) notes.push('Berechnungsfehler: '+detail.error);
   if(date<data.startDate) notes.push('Vor dem Startdatum der Salden');
   return {date,weekday:dateObj(date).toLocaleDateString('de-AT',{weekday:'short'}),status,
-   type:entry?(names[entry.type]||entry.type):planned?'Urlaub geplant':'Urlaubsgutschrift',
+   type:entry?(names[entry.type]||entry.type):planned?'Urlaub geplant':corrections.length?'Saldokorrektur':'Urlaubsgutschrift',
    workplace:work?entry.workplace||'':'',start:work?entry.start:'',end:work?entry.end:'',pause:work?entry.break:'',
    worked:detail.worked||0,overtime:detail.overtime||0,h50:detail.h50||0,h100:detail.h100||0,
    payout:work?([50,100].map(category=>category+' %: '+({time:'Zeittopf',pay:'Auszahlung',split:'50:50'}[payoutMode(entry,category)])).join(' · ')):'',credit:detail.credit||0,pay50:detail.pay50||0,pay100:detail.pay100||0,paid:detail.paid||0,
-   timeChange:date>=data.startDate&&date<=todayStr?(detail.balance||0):0,
+   timeChange:date>=data.startDate&&date<=todayStr?((detail.balance||0)+timeCorrection):0,
    timeBalance:reportTimeAt(date,results),vacation:entry?.type==='TU'&&eligible?1:0,
    planned:planned&&eligible?1:0,grant:credits,vacationBalance:vacationAt(date),
    holiday:vacationHolidayName(date),note:notes.filter(Boolean).join(' · '),error:detail.error||'',
@@ -1140,9 +1251,9 @@ function refreshAppDate(redraw=true) {
  const now=new Date(),next=dateISO(now);if(next===todayStr)return;
  const previousDate=todayStr,previousToday=today;
  const pristine=editing===null&&!entryTimesTouched&&$('entryDate').value===previousDate&&$('entryType').value==='Arbeit'&&!$('entryNote').value&&!entryWorkplaceTouched&&!$('entry50').value&&!$('entry100').value&&formPayout(50)==='time'&&formPayout(100)==='time'&&Number($('entryBreak').value)===Number(data.defaultBreak);
- today=now;todayStr=next;if(dateISO(overviewMonth).slice(0,7)===previousDate.slice(0,7))overviewMonth=new Date(today.getFullYear(),today.getMonth(),1);if(overviewSelected===previousDate)overviewSelected=next;
+ today=now;todayStr=next;if(overviewWeek===monday(previousDate))overviewWeek=monday(next);if(dateISO(overviewMonth).slice(0,7)===previousDate.slice(0,7))overviewMonth=new Date(today.getFullYear(),today.getMonth(),1);if(overviewSelected===previousDate)overviewSelected=next;alignOverviewCalendar();
  if(pristine){$('entryDate').value=todayStr;applyEntryShift();applyEntryWorkplace();}
- for(const id of ['creditDate','reportWeekDate','reportFrom','reportTo'])if($(id).value===previousDate)$(id).value=todayStr;
+ for(const id of ['correctionDate','reportWeekDate','reportFrom','reportTo'])if($(id).value===previousDate)$(id).value=todayStr;
  if($('reportMonth').value===previousDate.slice(0,7))$('reportMonth').value=todayStr.slice(0,7);
  if($('reportYear').value===String(previousToday.getFullYear()))$('reportYear').value=String(today.getFullYear());
  const previousData=data;data={...data,entries:{...data.entries},planned:[...data.planned]};
@@ -1167,7 +1278,7 @@ function pwaMessage(text){$('pwaStatus').textContent=text;}
 function pwaDetailKey(el){return el.id?'id:'+el.id:'summary:'+(el.querySelector(':scope>summary')?.textContent.trim()||'');}
 function capturePwaDraft(){
  const fields=[...document.querySelectorAll('input[id],select[id],textarea[id]')].filter(el=>el.type!=='file').map(el=>({id:el.id,value:el.value,checked:el.checked}));
- const draft={format:1,created:Date.now(),fields,planningView,templateEditorOpen:!$('templateForm').hidden,weekdays:[...document.querySelectorAll('[data-plan-weekday]')].map(el=>({value:el.value,checked:el.checked})),editing,entryTimesTouched,entryWorkplaceTouched,selected,calendarMulti,calendarSelection:[...calendarSelection],month:dateISO(month),overviewMonth:dateISO(overviewMonth),overviewSelected,yearMeasure,yearMonth,tab:document.querySelector('.tabs .active')?.dataset.tab||'overview',scroll:scrollY,openDetails:[...document.querySelectorAll('details')].filter(el=>el.open).map(pwaDetailKey)};
+ const draft={format:1,created:Date.now(),fields,planningView,templateEditorOpen:!$('templateForm').hidden,weekdays:[...document.querySelectorAll('[data-plan-weekday]')].map(el=>({value:el.value,checked:el.checked})),editing,entryTimesTouched,entryWorkplaceTouched,selected,calendarMulti,calendarSelection:[...calendarSelection],month:dateISO(month),overviewMonth:dateISO(overviewMonth),overviewSelected,overviewMode,overviewWeek,yearMeasure,yearMonth,tab:document.querySelector('.tabs .active')?.dataset.tab||'overview',scroll:scrollY,openDetails:[...document.querySelectorAll('details')].filter(el=>el.open).map(pwaDetailKey)};
  sessionStorage.setItem(pwaDraftKey,JSON.stringify(draft));
 }
 function restorePwaDraft(){
@@ -1186,12 +1297,13 @@ function restorePwaDraft(){
   if(['worked','overtime'].includes(draft.yearMeasure))yearMeasure=draft.yearMeasure;
   if(Number.isInteger(draft.yearMonth)&&draft.yearMonth>=0&&draft.yearMonth<12)yearMonth=draft.yearMonth;
   switchTab(['overview','entry','vacation','year','settings'].includes(draft.tab)?draft.tab:'overview');
-  if(backupDate(draft.overviewMonth)){overviewMonth=dateObj(draft.overviewMonth);overviewMonth.setDate(1);overviewSelected=backupDate(draft.overviewSelected)&&draft.overviewSelected.slice(0,7)===dateISO(overviewMonth).slice(0,7)?draft.overviewSelected:null;renderMonthlySummary();renderOverviewCalendar();}
+  if(['month','week'].includes(draft.overviewMode))overviewMode=draft.overviewMode;if(backupDate(draft.overviewWeek)&&draft.overviewWeek>='1900-01-01'&&draft.overviewWeek<='9999-12-25')overviewWeek=monday(draft.overviewWeek);
+  if(backupDate(draft.overviewMonth)){overviewMonth=dateObj(draft.overviewMonth);overviewMonth.setDate(1);overviewSelected=backupDate(draft.overviewSelected)&&draft.overviewSelected.slice(0,7)===dateISO(overviewMonth).slice(0,7)?draft.overviewSelected:null;alignOverviewCalendar();renderMonthlySummary();renderOverviewCalendar();}
   const workplace=draft.fields.find(f=>f.id==='entryWorkplace')?.value;
   if(typeof workplace==='string')renderEntryWorkplaces(workplace);
   for(const field of draft.fields){const el=$(field.id);if(!el||el.type==='file'||typeof field.value!=='string')continue;if(el.tagName==='SELECT'&&!Array.from(el.options).some(o=>o.value===field.value))continue;el.value=field.value;if(el.type==='checkbox'||el.type==='radio')el.checked=!!field.checked;}
   for(const item of draft.weekdays||[]){const el=[...document.querySelectorAll('[data-plan-weekday]')].find(el=>el.value===item.value);if(el)el.checked=!!item.checked;}
-  toggleWork();renderEntryShiftHint();renderEntryCalculation();renderCalendar();renderYear();updateReportPeriod();
+  toggleWork();renderEntryShiftHint();renderEntryCalculation();renderCalendar();renderYear();updateReportPeriod();$('correctionKind').dispatchEvent(new Event('change'));
   document.querySelectorAll('details').forEach(el=>{el.open=(draft.openDetails||[]).includes(pwaDetailKey(el));});
   sessionStorage.removeItem(pwaDraftKey);
   requestAnimationFrame(()=>window.scrollTo(0,Number(draft.scroll)||0));
