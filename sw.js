@@ -1,20 +1,20 @@
 'use strict';
-const VERSION="1.5.1",BUILD="1.5.1-638942d82f125836",ASSETS=[
+const VERSION="1.4",BUILD="1.4-3fd69397a1c04957",ASSETS=[
   {
     "url": "./index.html",
-    "sha256": "1cc331c8f9bda442d8bd224d0e32e02bb20bb528f2181ebf58eb8864e4b65376"
+    "sha256": "e01fac651b7ddcfcb4c252db2db5de94e50a667441610cef7d5a52c45a4b040a"
   },
   {
-    "url": "./app.js?v=727750f439e4",
-    "sha256": "727750f439e440107c2a6f6a45d6031fbc7f7fa6a320f4b82470309568df16f4"
+    "url": "./app.js?v=ee339af03805",
+    "sha256": "ee339af038055ca367254c253fcb8eda9c0e346541cc330b96982762f5cf5739"
   },
   {
-    "url": "./style.css?v=1d35f071f0e6",
-    "sha256": "1d35f071f0e6601fe4d1edd890a4f6975250306a14e6bc3719730ba15f07590b"
+    "url": "./style.css?v=f8b6969bfe0f",
+    "sha256": "f8b6969bfe0fb1d46329a271835edbcbba46b5b9bdad6dee7b55404d63b68828"
   },
   {
     "url": "./manifest.webmanifest",
-    "sha256": "d2adcdb6e48c8030a0a103751bead7c7fc696c466c7bebc80f03142dcf513e97"
+    "sha256": "21c36fc55870fb90b5c9c474c368c8f689c2ad426cef52a2f0f3e1893e59e93d"
   },
   {
     "url": "./icon.svg",
